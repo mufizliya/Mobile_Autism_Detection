@@ -1,0 +1,341 @@
+{
+    "protocol_name": "sensetoknow_style_final_temp_protocol_v1",
+    "target_device": "desktop_tablet_prototype",
+    "name_call_mode": "human_cue",
+    "camera": {
+        "position": "front_facing",
+        "target_fps": 30,
+        "target_resolution": "1280x720",
+        "recommended_distance_cm": 60
+    },
+    "notes": {
+        "human_cue": "At each name_call_event, the app shows/logs a cue and the examiner/parent says the child name aloud.",
+        "aoi_format": "AOI values are normalized approximate regions in screen coordinates: x_min, y_min, x_max, y_max from 0.0 to 1.0.",
+        "temporary_video_note": "Videos are temporary protocol stimuli and AOIs should be refined after visual inspection and test runs."
+    },
+    "stimuli": [
+        {
+            "id": "floating_bubbles",
+            "section_name": "Floating Bubbles",
+            "type": "nonsocial_movie",
+            "paper_category": "non_social",
+            "video_path": "temp/bubbles.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": null,
+            "nonsocial_aoi": {
+                "label": "bubbles",
+                "x_min": 0.05,
+                "y_min": 0.05,
+                "x_max": 0.95,
+                "y_max": 0.95
+            },
+            "measurements": [
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics",
+                "nonsocial_attention"
+            ]
+        },
+        {
+            "id": "name_call_1",
+            "type": "name_call_event",
+            "during_stimulus": "floating_bubbles",
+            "call_index": 1,
+            "call_time_sec": 2.5,
+            "mode": "human_cue"
+        },
+        {
+            "id": "dog_in_grass",
+            "section_name": "Dog in Grass",
+            "type": "nonsocial_movie",
+            "paper_category": "non_social",
+            "video_path": "temp/barking.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": null,
+            "nonsocial_aoi": {
+                "label": "dog",
+                "x_min": 0.05,
+                "y_min": 0.05,
+                "x_max": 0.95,
+                "y_max": 0.95
+            },
+            "measurements": [
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics",
+                "nonsocial_attention"
+            ]
+        },
+        {
+            "id": "spinning_top",
+            "section_name": "Spinning Top",
+            "type": "nonsocial_movie",
+            "paper_category": "non_social",
+            "video_path": "temp/spinning_top_hand.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": null,
+            "nonsocial_aoi": {
+                "label": "spinning_top",
+                "x_min": 0.15,
+                "y_min": 0.15,
+                "x_max": 0.85,
+                "y_max": 0.95
+            },
+            "measurements": [
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics",
+                "nonsocial_attention"
+            ]
+        },
+        {
+            "id": "mechanical_puppy",
+            "section_name": "Mechanical Puppy",
+            "type": "mixed_social_nonsocial_movie",
+            "paper_category": "mixed",
+            "video_path": "temp/mechanical_puppy.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": {
+                "label": "person",
+                "x_min": 0.00,
+                "y_min": 0.05,
+                "x_max": 0.45,
+                "y_max": 0.95
+            },
+            "nonsocial_aoi": {
+                "label": "mechanical_puppy",
+                "x_min": 0.45,
+                "y_min": 0.10,
+                "x_max": 1.00,
+                "y_max": 0.95
+            },
+            "measurements": [
+                "gaze_percent_social",
+                "gaze_silhouette",
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics"
+            ]
+        },
+        {
+            "id": "name_call_2",
+            "type": "name_call_event",
+            "during_stimulus": "mechanical_puppy",
+            "call_index": 2,
+            "call_time_sec": 2.5,
+            "mode": "human_cue"
+        },
+        {
+            "id": "blowing_bubbles",
+            "section_name": "Blowing Bubbles",
+            "type": "mixed_social_nonsocial_movie",
+            "paper_category": "mixed",
+            "video_path": "temp/blowing_bubbles.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": {
+                "label": "person_face_body",
+                "x_min": 0.00,
+                "y_min": 0.05,
+                "x_max": 0.50,
+                "y_max": 0.95
+            },
+            "nonsocial_aoi": {
+                "label": "bubbles",
+                "x_min": 0.45,
+                "y_min": 0.05,
+                "x_max": 1.00,
+                "y_max": 0.95
+            },
+            "measurements": [
+                "gaze_percent_social",
+                "gaze_silhouette",
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics"
+            ]
+        },
+        {
+            "id": "rhymes_and_toys",
+            "section_name": "Rhymes and Toys",
+            "type": "speech_attention_movie",
+            "paper_category": "speech_social",
+            "video_path": "temp/rhymes_and_toys.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": {
+                "label": "speaker",
+                "x_min": 0.10,
+                "y_min": 0.05,
+                "x_max": 0.90,
+                "y_max": 0.95
+            },
+            "nonsocial_aoi": null,
+            "speaker_turns": [
+                {
+                    "speaker": "center",
+                    "start_sec": 0.0,
+                    "end_sec": 10.0,
+                    "aoi": {
+                        "x_min": 0.10,
+                        "y_min": 0.05,
+                        "x_max": 0.90,
+                        "y_max": 0.95
+                    }
+                }
+            ],
+            "measurements": [
+                "attention_to_speech",
+                "gaze_to_speech",
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics"
+            ]
+        },
+        {
+            "id": "make_me_laugh",
+            "section_name": "Make Me Laugh",
+            "type": "social_movie",
+            "paper_category": "social",
+            "video_path": "temp/peekaboo.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": {
+                "label": "person_face_body",
+                "x_min": 0.05,
+                "y_min": 0.05,
+                "x_max": 0.95,
+                "y_max": 0.95
+            },
+            "nonsocial_aoi": null,
+            "measurements": [
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics",
+                "social_attention"
+            ]
+        },
+        {
+            "id": "playing_with_blocks",
+            "section_name": "Playing with Blocks",
+            "type": "mixed_social_nonsocial_movie",
+            "paper_category": "mixed",
+            "video_path": "temp/building_block.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": {
+                "label": "person",
+                "x_min": 0.00,
+                "y_min": 0.05,
+                "x_max": 0.50,
+                "y_max": 0.95
+            },
+            "nonsocial_aoi": {
+                "label": "blocks",
+                "x_min": 0.40,
+                "y_min": 0.20,
+                "x_max": 1.00,
+                "y_max": 0.95
+            },
+            "measurements": [
+                "gaze_percent_social",
+                "gaze_silhouette",
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics"
+            ]
+        },
+        {
+            "id": "fun_at_the_park",
+            "section_name": "Fun at the Park",
+            "type": "two_speaker_attention_movie",
+            "paper_category": "speech_social",
+            "video_path": "temp/fun_at_the_park.mp4",
+            "clip_start_sec": 0,
+            "clip_end_sec": 10,
+            "social_aoi": {
+                "label": "two_speakers",
+                "x_min": 0.00,
+                "y_min": 0.05,
+                "x_max": 1.00,
+                "y_max": 0.95
+            },
+            "nonsocial_aoi": null,
+            "speaker_turns": [
+                {
+                    "speaker": "left",
+                    "start_sec": 0.0,
+                    "end_sec": 2.5,
+                    "aoi": {
+                        "x_min": 0.00,
+                        "y_min": 0.05,
+                        "x_max": 0.50,
+                        "y_max": 0.95
+                    }
+                },
+                {
+                    "speaker": "right",
+                    "start_sec": 2.5,
+                    "end_sec": 5.0,
+                    "aoi": {
+                        "x_min": 0.50,
+                        "y_min": 0.05,
+                        "x_max": 1.00,
+                        "y_max": 0.95
+                    }
+                },
+                {
+                    "speaker": "left",
+                    "start_sec": 5.0,
+                    "end_sec": 7.5,
+                    "aoi": {
+                        "x_min": 0.00,
+                        "y_min": 0.05,
+                        "x_max": 0.50,
+                        "y_max": 0.95
+                    }
+                },
+                {
+                    "speaker": "right",
+                    "start_sec": 7.5,
+                    "end_sec": 10.0,
+                    "aoi": {
+                        "x_min": 0.50,
+                        "y_min": 0.05,
+                        "x_max": 1.00,
+                        "y_max": 0.95
+                    }
+                }
+            ],
+            "measurements": [
+                "attention_to_speech",
+                "speaker_turn_attention",
+                "gaze_to_speech",
+                "facing_forward",
+                "blink_rate",
+                "head_movement",
+                "facial_dynamics"
+            ]
+        },
+        {
+            "id": "name_call_3",
+            "type": "name_call_event",
+            "during_stimulus": "fun_at_the_park",
+            "call_index": 3,
+            "call_time_sec": 2.5,
+            "mode": "human_cue"
+        }
+    ]
+}
