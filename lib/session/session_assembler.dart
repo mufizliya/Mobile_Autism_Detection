@@ -3,6 +3,7 @@ import 'dart:io';
 import 'session_file_names.dart';
 import 'session_service.dart';
 import '../phenotype/mappers/paper_phenotype_mapper.dart';
+import '../phenotype/validation/session_quality_validator.dart';
 
 class SessionAssembler {
   static Future<Map<String, dynamic>> buildAndSave({
@@ -51,6 +52,8 @@ class SessionAssembler {
         );
     final Map<String, dynamic> phenotypeOutputs =
         await PaperPhenotypeMapper.buildAndSave(sessionDir: sessionDir);
+    final Map<String, dynamic> sessionQuality =
+        await SessionQualityValidator.buildAndSave(sessionDir: sessionDir);
 
     final Map<String, dynamic> phenotypeVector = Map<String, dynamic>.from(
       phenotypeOutputs['phenotype_vector'] as Map,
@@ -95,6 +98,7 @@ class SessionAssembler {
       SessionFileNames.stimulusProtocolSummary: stimulusProtocolSummary != null,
       SessionFileNames.stimulusEvents: stimulusEvents != null,
       SessionFileNames.videoTest: videoTest != null,
+      SessionFileNames.sessionQuality: true,
       SessionFileNames.parentNameCallCues: allFiles.contains(
         SessionFileNames.parentNameCallCues,
       ),
@@ -129,6 +133,7 @@ class SessionAssembler {
       'schema_version': 'python_mobile_replica_final_session_v1',
       'generated_at': DateTime.now().toIso8601String(),
       'session_dir': sessionDir.path,
+      'session_quality': sessionQuality,
       'completed_modules': [
         if (childInfo != null) 'child_info',
         if (scqResults != null) 'scq',
@@ -137,6 +142,8 @@ class SessionAssembler {
         if (framewiseCsvFiles.isNotEmpty) 'framewise_logs',
         if (gameMetrics != null) 'bubble_game',
         'phenotype_mapping_v1',
+        'session_quality_validation',
+        
       ],
       'files': files,
       'manifest_file': SessionFileNames.sessionManifest,

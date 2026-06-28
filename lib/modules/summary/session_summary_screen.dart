@@ -60,6 +60,14 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
         ? Map<String, dynamic>.from(finalSession!['files'] as Map)
         : <String, dynamic>{};
 
+    final Map<String, dynamic> sessionQuality =
+        finalSession?['session_quality'] is Map
+        ? Map<String, dynamic>.from(finalSession!['session_quality'] as Map)
+        : <String, dynamic>{};
+
+    final String qualityStatus =
+        sessionQuality['overall_status']?.toString() ?? 'unknown';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Session Summary')),
       body: SafeArea(
@@ -80,6 +88,27 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
                     const SizedBox(height: 12),
                     SelectableText(
                       'Session folder:\n${widget.sessionDir.path}',
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Session Quality',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      qualityStatus.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: qualityStatus == 'valid'
+                            ? Colors.green
+                            : qualityStatus == 'warning'
+                            ? Colors.orange
+                            : Colors.red,
+                      ),
                     ),
                     const SizedBox(height: 24),
                     const Text(
