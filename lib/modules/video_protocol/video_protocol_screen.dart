@@ -38,6 +38,9 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
   Map<String, dynamic>? loadedSchedule;
   Map<String, dynamic>? loadedMasterTimeline;
+  final List<Map<String, dynamic>> actualTriggeredNameCallEvents = [];
+
+  final Set<String> alreadyLoggedNameCallIds = {};
 
   List<Map<String, dynamic>> timeline = [];
   List<Map<String, dynamic>> scheduledEvents = [];
@@ -186,6 +189,8 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     playbackStartedAt = DateTime.now();
     playbackCompletedAt = null;
     playbackCompleted = false;
+    actualTriggeredNameCallEvents.clear();
+    alreadyLoggedNameCallIds.clear();
 
     await NativeFaceRecorderService.start();
     await currentController.seekTo(Duration.zero);
@@ -194,7 +199,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     cueTimer?.cancel();
 
     cueTimer = Timer.periodic(
-      const Duration(milliseconds: 150),
+      const Duration(milliseconds: 100),
       (_) => updateParentCue(),
     );
 
@@ -247,6 +252,8 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     final double currentSec =
         currentController.value.position.inMilliseconds / 1000.0;
 
+    logActualNameCallEvents(currentSec: currentSec);
+
     final String childName = widget.childInfo['name']?.toString().trim() ?? '';
 
     String cue = '';
@@ -269,88 +276,193 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     }
   }
 
+  void logActualNameCallEvents({required double currentSec}) {
+    for (final Map<String, dynamic> event in scheduledEvents) {
+      final String eventId = event['id']?.toString() ?? '';
+
+      if (eventId.isEmpty) {
+        continue;
+      }
+
+      if (alreadyLoggedNameCallIds.contains(eventId)) {
+        continue;
+      }
+
+      final double scheduledGlobalSec = toDouble(event['global_call_time_sec']);
+
+      final double delayFromScheduleSec = currentSec - scheduledGlobalSec;
+
+      if (delayFromScheduleSec < 0 || delayFromScheduleSec > 0.35) {
+        continue;
+      }
+
+      final Map<String, dynamic> actualEvent = Map<String, dynamic>.from(event);
+
+      actualEvent.addAll({
+        'triggered': true,
+        'actual_global_trigger_time_sec': double.parse(
+          currentSec.toStringAsFixed(3),
+        ),
+        'actual_trigger_delay_from_schedule_sec': double.parse(
+          delayFromScheduleSec.toStringAsFixed(3),
+        ),
+        'actual_wall_time_iso': DateTime.now().toIso8601String(),
+        'trigger_source': 'flutter_video_playback_timer',
+      });
+
+      actualTriggeredNameCallEvents.add(actualEvent);
+      alreadyLoggedNameCallIds.add(eventId);
+    }
+  }
+
   Future<void> handleVideoCompleted() async {
-    if (playbackCompleted) {
-      return;
+  if (playbackCompleted) {
+    return;
+  }
+
+  playbackCompleted = true;
+  playbackCompletedAt = DateTime.now();
+
+  cueTimer?.cancel();
+
+  for (final Map<String, dynamic> event in scheduledEvents) {
+    final String eventId = event['id']?.toString() ?? '';
+
+    if (eventId.isEmpty || alreadyLoggedNameCallIds.contains(eventId)) {
+      continue;
     }
 
-    playbackCompleted = true;
-    playbackCompletedAt = DateTime.now();
+    final Map<String, dynamic> fallbackEvent =
+        Map<String, dynamic>.from(event);
 
-    cueTimer?.cancel();
-    Map<String, dynamic>? framewisePayload;
-
-    try {
-      framewisePayload = await NativeFaceRecorderService.stopAndSave(
-        sessionDir: widget.sessionDir,
-      );
-    } catch (error) {
-      framewisePayload = {'error': error.toString()};
-    }
-    Map<String, dynamic>? framewiseExportSummary;
-
-    if (framewisePayload['frames'] is List) {
-      framewiseExportSummary = await FramewiseLogExporter.exportPerStimulusLogs(
-        sessionDir: widget.sessionDir,
-        framewiseSignals: framewisePayload,
-        timeline: timeline,
-      );
-    }
-
-    final VideoPlayerController? currentController = controller;
-
-    final double durationSec = currentController == null
-        ? 0.0
-        : currentController.value.duration.inMilliseconds / 1000.0;
-
-    final Map<String, dynamic> playbackSummary = {
-      'framewise_recording_attached': true,
-      'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
-      'framewise_face_signals_summary': framewisePayload['summary'],
-      'framewise_csv_export': framewiseExportSummary,
-      'status': 'completed',
-      'started_at': playbackStartedAt?.toIso8601String(),
-      'completed_at': playbackCompletedAt?.toIso8601String(),
-      'duration_sec': double.parse(durationSec.toStringAsFixed(3)),
-      'master_video_asset': StimulusProtocolService.masterVideoAssetPath,
-    };
-
-    await SessionService.updateJson(
-      sessionDir: widget.sessionDir,
-      fileName: SessionFileNames.videoTest,
-      updates: {'mobile_playback': playbackSummary},
-    );
-
-    await SessionService.updateJson(
-      sessionDir: widget.sessionDir,
-      fileName: SessionFileNames.finalSession,
-      updates: {
-        'updated_at': DateTime.now().toIso8601String(),
-        'completed_modules': [
-          'child_info',
-          'scq',
-          'video_protocol_raw_files',
-          'video_protocol_playback',
-        ],
-        'video_playback': playbackSummary,
-      },
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      isPlaying = false;
-      activeParentCue = '';
-      status =
-          'Master video playback completed.\n\n'
-          'Next step will attach mobile framewise recorder and generate '
-          'Python-style per-stimulus CSV logs.';
+    fallbackEvent.addAll({
+      'triggered': false,
+      'actual_global_trigger_time_sec': null,
+      'actual_trigger_delay_from_schedule_sec': null,
+      'actual_wall_time_iso': null,
+      'trigger_source': 'not_observed_during_playback',
     });
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Video playback completed.')));
+    actualTriggeredNameCallEvents.add(fallbackEvent);
+    alreadyLoggedNameCallIds.add(eventId);
   }
+
+  await SessionService.saveJson(
+    sessionDir: widget.sessionDir,
+    fileName: SessionFileNames.stimulusEvents,
+    data: {
+      'scheduled_name_call_events': scheduledEvents,
+      'triggered_name_call_events': actualTriggeredNameCallEvents,
+      'trigger_logging': {
+        'schema_version':
+            'mobile_actual_playback_name_call_trigger_logging_v1',
+        'generated_at': DateTime.now().toIso8601String(),
+        'method': 'flutter_video_player_position_timer',
+        'timer_interval_ms': 100,
+        'trigger_window_sec': 0.35,
+        'total_scheduled': scheduledEvents.length,
+        'total_triggered_observed': actualTriggeredNameCallEvents
+            .where(
+              (Map<String, dynamic> event) => event['triggered'] == true,
+            )
+            .length,
+      },
+    },
+  );
+
+  Map<String, dynamic>? framewisePayload;
+
+  try {
+    framewisePayload = await NativeFaceRecorderService.stopAndSave(
+      sessionDir: widget.sessionDir,
+    );
+  } catch (error) {
+    framewisePayload = {'error': error.toString()};
+  }
+
+  Map<String, dynamic>? framewiseExportSummary;
+
+  if (framewisePayload['frames'] is List) {
+    framewiseExportSummary = await FramewiseLogExporter.exportPerStimulusLogs(
+      sessionDir: widget.sessionDir,
+      framewiseSignals: framewisePayload,
+      timeline: timeline,
+    );
+  }
+
+  final VideoPlayerController? currentController = controller;
+
+  final double durationSec = currentController == null
+      ? 0.0
+      : currentController.value.duration.inMilliseconds / 1000.0;
+
+  final int observedTriggeredCount = actualTriggeredNameCallEvents
+      .where(
+        (Map<String, dynamic> event) => event['triggered'] == true,
+      )
+      .length;
+
+  final Map<String, dynamic> playbackSummary = {
+    'framewise_recording_attached': true,
+    'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
+    'framewise_face_signals_summary': framewisePayload['summary'],
+    'framewise_csv_export': framewiseExportSummary,
+    'actual_name_call_trigger_logging': {
+      'enabled': true,
+      'method': 'flutter_video_player_position_timer',
+      'timer_interval_ms': 100,
+      'trigger_window_sec': 0.35,
+      'scheduled_count': scheduledEvents.length,
+      'observed_triggered_count': observedTriggeredCount,
+      'events_file': SessionFileNames.stimulusEvents,
+    },
+    'status': 'completed',
+    'started_at': playbackStartedAt?.toIso8601String(),
+    'completed_at': playbackCompletedAt?.toIso8601String(),
+    'duration_sec': double.parse(durationSec.toStringAsFixed(3)),
+    'master_video_asset': StimulusProtocolService.masterVideoAssetPath,
+  };
+
+  await SessionService.updateJson(
+    sessionDir: widget.sessionDir,
+    fileName: SessionFileNames.videoTest,
+    updates: {'mobile_playback': playbackSummary},
+  );
+
+  await SessionService.updateJson(
+    sessionDir: widget.sessionDir,
+    fileName: SessionFileNames.finalSession,
+    updates: {
+      'updated_at': DateTime.now().toIso8601String(),
+      'completed_modules': [
+        'child_info',
+        'scq',
+        'video_protocol_raw_files',
+        'video_protocol_playback',
+      ],
+      'video_playback': playbackSummary,
+    },
+  );
+
+  if (!mounted) return;
+
+  setState(() {
+    isPlaying = false;
+    activeParentCue = '';
+    status =
+        'Master video playback completed.\n\n'
+        'Framewise recorder saved.\n'
+        'Per-stimulus CSV logs generated.\n'
+        'Actual playback-time name-call events logged.\n\n'
+        'Continue to bubble game.';
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Video playback completed.'),
+    ),
+  );
+}
 
   void handleVideoState() {
     final VideoPlayerController? currentController = controller;
