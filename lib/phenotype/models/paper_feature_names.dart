@@ -5,14 +5,11 @@ class PaperFeatureNames {
   static const String facingForwardNonsocialMovies =
       'paper_facing_forward_nonsocial_movies';
 
-  static const String gazePercentSocial =
-      'paper_gaze_percent_social';
+  static const String gazePercentSocial = 'paper_gaze_percent_social';
 
-  static const String gazeSilhouetteScore =
-      'paper_gaze_silhouette_score';
+  static const String gazeSilhouetteScore = 'paper_gaze_silhouette_score';
 
-  static const String attentionToSpeech =
-      'paper_attention_to_speech';
+  static const String attentionToSpeech = 'paper_attention_to_speech';
 
   static const String responseToNameDelaySec =
       'paper_response_to_name_delay_sec';
@@ -20,8 +17,7 @@ class PaperFeatureNames {
   static const String responseToNameProportion =
       'paper_response_to_name_proportion';
 
-  static const String blinkRateSocialMovies =
-      'paper_blink_rate_social_movies';
+  static const String blinkRateSocialMovies = 'paper_blink_rate_social_movies';
 
   static const String blinkRateNonsocialMovies =
       'paper_blink_rate_nonsocial_movies';

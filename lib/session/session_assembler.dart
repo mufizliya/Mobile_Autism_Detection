@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'session_file_names.dart';
 import 'session_service.dart';
+import '../phenotype/mappers/paper_phenotype_mapper.dart';
 
 class SessionAssembler {
   static Future<Map<String, dynamic>> buildAndSave({
@@ -9,80 +10,102 @@ class SessionAssembler {
   }) async {
     final Map<String, dynamic>? childInfo =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.childInfo,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.childInfo,
+        );
 
     final Map<String, dynamic>? scqResults =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.scqResults,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.scqResults,
+        );
 
     final Map<String, dynamic>? videoTest =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.videoTest,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.videoTest,
+        );
 
     final Map<String, dynamic>? stimulusEvents =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.stimulusEvents,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.stimulusEvents,
+        );
 
     final Map<String, dynamic>? stimulusProtocolSummary =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.stimulusProtocolSummary,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.stimulusProtocolSummary,
+        );
 
     final Map<String, dynamic>? framewiseFaceSignals =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.framewiseFaceSignals,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.framewiseFaceSignals,
+        );
 
     final Map<String, dynamic>? gameMetrics =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.gameMetrics,
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.gameMetrics,
+        );
+    final Map<String, dynamic> phenotypeOutputs =
+        await PaperPhenotypeMapper.buildAndSave(sessionDir: sessionDir);
+
+    final Map<String, dynamic> phenotypeVector = Map<String, dynamic>.from(
+      phenotypeOutputs['phenotype_vector'] as Map,
     );
 
-    final List<FileSystemEntity> entities =
-        await sessionDir.list().toList();
+    final Map<String, dynamic> paperAlignedFeatures = Map<String, dynamic>.from(
+      phenotypeOutputs['paper_aligned_features'] as Map,
+    );
 
-    final List<String> allFiles = entities
-        .whereType<File>()
-        .map((File file) => file.uri.pathSegments.last)
-        .toList()
-      ..sort();
+    final Map<String, dynamic> paperFeatureCoverage = Map<String, dynamic>.from(
+      phenotypeOutputs['paper_feature_coverage'] as Map,
+    );
+
+    final List<FileSystemEntity> entities = await sessionDir.list().toList();
+
+    final List<String> allFiles =
+        entities
+            .whereType<File>()
+            .map((File file) => file.uri.pathSegments.last)
+            .toList()
+          ..sort();
 
     final List<String> framewiseCsvFiles = allFiles
         .where((String fileName) => fileName.endsWith('_framewise_log.csv'))
         .toList();
 
     final List<String> framewiseSummaryFiles = allFiles
-        .where((String fileName) => fileName.endsWith('_framewise_summary.json'))
+        .where(
+          (String fileName) => fileName.endsWith('_framewise_summary.json'),
+        )
         .toList();
 
     final List<String> reactionCsvFiles = allFiles
-        .where((String fileName) => fileName == SessionFileNames.bubbleGameReactions)
+        .where(
+          (String fileName) => fileName == SessionFileNames.bubbleGameReactions,
+        )
         .toList();
 
     final Map<String, dynamic> files = {
       SessionFileNames.childInfo: childInfo != null,
       SessionFileNames.scqResults: scqResults != null,
-      SessionFileNames.stimulusProtocolSummary:
-          stimulusProtocolSummary != null,
+      SessionFileNames.stimulusProtocolSummary: stimulusProtocolSummary != null,
       SessionFileNames.stimulusEvents: stimulusEvents != null,
       SessionFileNames.videoTest: videoTest != null,
-      SessionFileNames.parentNameCallCues:
-          allFiles.contains(SessionFileNames.parentNameCallCues),
+      SessionFileNames.parentNameCallCues: allFiles.contains(
+        SessionFileNames.parentNameCallCues,
+      ),
       SessionFileNames.framewiseFaceSignals: framewiseFaceSignals != null,
       SessionFileNames.gameMetrics: gameMetrics != null,
-      SessionFileNames.bubbleGameReactions:
-          allFiles.contains(SessionFileNames.bubbleGameReactions),
+      SessionFileNames.phenotypeVector: true,
+      SessionFileNames.paperAlignedFeatures: true,
+      SessionFileNames.paperFeatureCoverage: true,
+      SessionFileNames.bubbleGameReactions: allFiles.contains(
+        SessionFileNames.bubbleGameReactions,
+      ),
     };
 
     final Map<String, dynamic> manifest = {
@@ -113,6 +136,7 @@ class SessionAssembler {
         if (videoTest != null) 'video_protocol_playback',
         if (framewiseCsvFiles.isNotEmpty) 'framewise_logs',
         if (gameMetrics != null) 'bubble_game',
+        'phenotype_mapping_v1',
       ],
       'files': files,
       'manifest_file': SessionFileNames.sessionManifest,
@@ -129,10 +153,14 @@ class SessionAssembler {
       },
       'game_metrics': gameMetrics,
       'phenotype_calculation': {
-        'status': 'not_started',
+        'status': 'paper_aligned_mapping_generated',
+        'diagnosis_generated': false,
         'note':
-            'Raw mobile session files are complete. Phenotype mapping will be added in the next phase.',
+            'Generated paper-aligned 23-feature phenotype vector. This is not a diagnostic classifier.',
       },
+      'phenotype_vector': phenotypeVector,
+      'paper_aligned_features': paperAlignedFeatures,
+      'paper_feature_coverage': paperFeatureCoverage,
     };
 
     await SessionService.saveJson(
