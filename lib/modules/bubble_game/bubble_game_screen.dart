@@ -9,6 +9,7 @@ import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/scheduler.dart';
+import '../../session/session_assembler.dart';
 
 class BubbleGameScreen extends StatefulWidget {
   const BubbleGameScreen({
@@ -525,6 +526,7 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
         'game_metrics': gameMetrics,
       },
     );
+    await SessionAssembler.buildAndSave(sessionDir: widget.sessionDir);
   }
 
   Map<String, dynamic> buildTouchFeatures() {

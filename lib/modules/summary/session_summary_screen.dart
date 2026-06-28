@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
+import '../../session/session_assembler.dart';
 
 class SessionSummaryScreen extends StatefulWidget {
   const SessionSummaryScreen({
@@ -30,8 +31,8 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
   }
 
   Future<void> loadSummary() async {
-    final Map<String, dynamic>? data =
-        await SessionService.readJsonIfExists(
+    await SessionAssembler.buildAndSave(sessionDir: widget.sessionDir);
+    final Map<String, dynamic>? data = await SessionService.readJsonIfExists(
       sessionDir: widget.sessionDir,
       fileName: SessionFileNames.finalSession,
     );
@@ -48,28 +49,22 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String childName =
-        widget.childInfo['name']?.toString().trim() ?? '';
+    final String childName = widget.childInfo['name']?.toString().trim() ?? '';
 
     final List<dynamic> completedModules =
         finalSession?['completed_modules'] is List
-            ? finalSession!['completed_modules'] as List<dynamic>
-            : <dynamic>[];
+        ? finalSession!['completed_modules'] as List<dynamic>
+        : <dynamic>[];
 
-    final Map<String, dynamic> files =
-        finalSession?['files'] is Map
-            ? Map<String, dynamic>.from(finalSession!['files'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> files = finalSession?['files'] is Map
+        ? Map<String, dynamic>.from(finalSession!['files'] as Map)
+        : <String, dynamic>{};
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Session Summary'),
-      ),
+      appBar: AppBar(title: const Text('Session Summary')),
       body: SafeArea(
         child: loading
-            ? const Center(
-                child: CircularProgressIndicator(),
-              )
+            ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: Column(

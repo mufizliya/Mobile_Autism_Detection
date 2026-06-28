@@ -37,6 +37,7 @@ class SessionFileNames {
   // Validation/final files
   static const String sessionQuality = 'session_quality.json';
   static const String finalSession = 'final_session.json';
+  static const String sessionManifest = 'session_manifest.json';
 
   static String framewiseLogCsv(String stimulusId) {
     return '${stimulusId}_framewise_log.csv';
