@@ -650,7 +650,10 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
         .where((double value) => value > 0)
         .toList();
 
-    final bool touchForceAvailable = appliedForceValues.isNotEmpty;
+    final double appliedForceStd = std(appliedForceValues);
+
+    final bool touchForceAvailable =
+        appliedForceValues.length >= 3 && appliedForceStd > 0.005;
 
     return {
       'touch_count': totalTouches,
@@ -664,7 +667,13 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
       'touch_average_applied_force': touchForceAvailable
           ? round4(mean(appliedForceValues))
           : null,
+      'touch_applied_force_std': appliedForceValues.isEmpty
+          ? null
+          : round4(appliedForceStd),
       'touch_force_available': touchForceAvailable,
+      'touch_force_unavailable_reason': touchForceAvailable
+          ? null
+          : 'Pointer pressure was missing or nearly constant on this device.',
       'touch_average_radius_major': radiusMajorValues.isEmpty
           ? null
           : round4(mean(radiusMajorValues)),
