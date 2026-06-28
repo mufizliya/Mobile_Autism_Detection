@@ -348,12 +348,27 @@ class PaperPhenotypeMapper {
           'Paper-aligned touch feature. Current implementation uses standard deviation of touch-to-bubble distance.',
     );
 
+    final bool touchForceAvailable =
+        _valueFromNested(gameMetrics, [
+          'touch_features',
+          'touch_force_available',
+        ]) ==
+        true;
+
     setFeature(
       name: PaperFeatureNames.popTheBubblesAverageAppliedForce,
-      value: null,
-      source: 'missing_touch_force',
-      note:
-          'Paper feature requires touch pressure/applied force. Current Flutter bubble game does not yet record real pressure or force, so this is intentionally null.',
+      value: touchForceAvailable
+          ? _valueFromNested(gameMetrics, [
+              'touch_features',
+              'touch_average_applied_force',
+            ])
+          : null,
+      source: touchForceAvailable
+          ? 'flutter_pointer_pressure_proxy'
+          : 'missing_touch_force',
+      note: touchForceAvailable
+          ? 'Paper-aligned touch force proxy. Computed from Flutter PointerEvent.pressure values. This is device-dependent and should be calibrated.'
+          : 'Paper feature requires touch pressure/applied force. This device/session did not provide usable pressure values, so this is intentionally null.',
     );
 
     setFeature(

@@ -10,6 +10,7 @@ import '../../session/session_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/scheduler.dart';
 import '../../session/session_assembler.dart';
+import 'package:flutter/gestures.dart';
 
 class BubbleGameScreen extends StatefulWidget {
   const BubbleGameScreen({
@@ -77,6 +78,12 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
   final List<Map<String, dynamic>> touchEvents = [];
 
   Map<String, dynamic>? currentTouchEvent;
+  double latestPointerPressure = 0.0;
+  double latestPointerPressureMin = 0.0;
+  double latestPointerPressureMax = 0.0;
+  double latestPointerRadiusMajor = 0.0;
+  double latestPointerRadiusMinor = 0.0;
+  PointerDeviceKind latestPointerKind = PointerDeviceKind.touch;
 
   @override
   void initState() {
@@ -235,6 +242,50 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
     );
   }
 
+  void handlePointerDown(PointerDownEvent event) {
+    updateLatestPointerValues(event);
+  }
+
+  void handlePointerMove(PointerMoveEvent event) {
+    updateLatestPointerValues(event);
+
+    final Map<String, dynamic>? touchEvent = currentTouchEvent;
+
+    if (touchEvent == null) {
+      return;
+    }
+
+    final List<dynamic> pressureValues =
+        touchEvent['pressure_values'] as List<dynamic>;
+
+    final List<dynamic> radiusMajorValues =
+        touchEvent['radius_major_values'] as List<dynamic>;
+
+    final List<dynamic> radiusMinorValues =
+        touchEvent['radius_minor_values'] as List<dynamic>;
+
+    pressureValues.add(round4(event.pressure));
+    radiusMajorValues.add(round4(event.radiusMajor));
+    radiusMinorValues.add(round4(event.radiusMinor));
+  }
+
+  void handlePointerUp(PointerUpEvent event) {
+    updateLatestPointerValues(event);
+  }
+
+  void handlePointerCancel(PointerCancelEvent event) {
+    updateLatestPointerValues(event);
+  }
+
+  void updateLatestPointerValues(PointerEvent event) {
+    latestPointerPressure = event.pressure;
+    latestPointerPressureMin = event.pressureMin;
+    latestPointerPressureMax = event.pressureMax;
+    latestPointerRadiusMajor = event.radiusMajor;
+    latestPointerRadiusMinor = event.radiusMinor;
+    latestPointerKind = event.kind;
+  }
+
   void handlePanStart(DragStartDetails details) {
     if (!gameStarted || gameFinished) {
       return;
@@ -260,7 +311,17 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
       'touch_path_length': 0,
       'nearest_bubble_distance': nearestBubbleDistance(pos),
       'hit': false,
-      'pressure_value': 0,
+      'pointer_kind': latestPointerKind.name,
+      'pressure_value': round4(latestPointerPressure),
+      'pressure_min': round4(latestPointerPressureMin),
+      'pressure_max': round4(latestPointerPressureMax),
+      'radius_major': round4(latestPointerRadiusMajor),
+      'radius_minor': round4(latestPointerRadiusMinor),
+      'pressure_values': [round4(latestPointerPressure)],
+      'radius_major_values': [round4(latestPointerRadiusMajor)],
+      'radius_minor_values': [round4(latestPointerRadiusMinor)],
+      'applied_force_proxy': round4(latestPointerPressure),
+      'touch_force_available': latestPointerPressure > 0,
     };
 
     attemptPop(pos);
@@ -314,6 +375,26 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
 
     event['touch_path_length'] = double.parse(
       calculatePathLength(rawPoints).toStringAsFixed(4),
+    );
+    final List<double> pressureValues = dynamicNumberList(
+      event['pressure_values'],
+    );
+
+    final List<double> radiusMajorValues = dynamicNumberList(
+      event['radius_major_values'],
+    );
+
+    final List<double> radiusMinorValues = dynamicNumberList(
+      event['radius_minor_values'],
+    );
+
+    event['average_pressure'] = round4(mean(pressureValues));
+    event['max_pressure'] = round4(maxValue(pressureValues));
+    event['average_radius_major'] = round4(mean(radiusMajorValues));
+    event['average_radius_minor'] = round4(mean(radiusMinorValues));
+    event['applied_force_proxy'] = round4(mean(pressureValues));
+    event['touch_force_available'] = pressureValues.any(
+      (double value) => value > 0,
     );
 
     touchEvents.add(event);
@@ -468,13 +549,14 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
           touchFeatures['touch_average_length'] ?? 0,
       'paper_pop_the_bubbles_average_applied_force':
           touchFeatures['touch_average_applied_force'] ?? 0,
-      'touch_force_available': false,
+      'touch_force_available': touchFeatures['touch_force_available'] == true,
       'game_duration_sec': gameDurationSec,
       'spawn_interval_min_sec': spawnIntervalMinSec,
       'spawn_interval_max_sec': spawnIntervalMaxSec,
       'bubble_min_diameter': bubbleMinDiameter,
       'bubble_max_diameter': bubbleMaxDiameter,
-      'measurement_source': 'flutter_touchscreen_python_style_bubble_game',
+      'measurement_source':
+          'flutter_touchscreen_python_style_bubble_game_with_pointer_pressure',
       'reaction_log_file': SessionFileNames.bubbleGameReactions,
     };
 
@@ -547,6 +629,28 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
         .whereType<num>()
         .map((num value) => value.toDouble())
         .toList();
+    final List<double> appliedForceValues = touchEvents
+        .map((Map<String, dynamic> event) => event['applied_force_proxy'])
+        .whereType<num>()
+        .map((num value) => value.toDouble())
+        .where((double value) => value > 0)
+        .toList();
+
+    final List<double> radiusMajorValues = touchEvents
+        .map((Map<String, dynamic> event) => event['average_radius_major'])
+        .whereType<num>()
+        .map((num value) => value.toDouble())
+        .where((double value) => value > 0)
+        .toList();
+
+    final List<double> radiusMinorValues = touchEvents
+        .map((Map<String, dynamic> event) => event['average_radius_minor'])
+        .whereType<num>()
+        .map((num value) => value.toDouble())
+        .where((double value) => value > 0)
+        .toList();
+
+    final bool touchForceAvailable = appliedForceValues.isNotEmpty;
 
     return {
       'touch_count': totalTouches,
@@ -557,8 +661,16 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
           : round4(hitTouches / totalTouches),
       'touch_error_std': round4(std(errors)),
       'touch_average_length': round4(mean(lengths)),
-      'touch_average_applied_force': 0,
-      'touch_force_available': false,
+      'touch_average_applied_force': touchForceAvailable
+          ? round4(mean(appliedForceValues))
+          : null,
+      'touch_force_available': touchForceAvailable,
+      'touch_average_radius_major': radiusMajorValues.isEmpty
+          ? null
+          : round4(mean(radiusMajorValues)),
+      'touch_average_radius_minor': radiusMinorValues.isEmpty
+          ? null
+          : round4(mean(radiusMinorValues)),
     };
   }
 
@@ -605,6 +717,22 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
     }
 
     return total;
+  }
+
+  List<double> dynamicNumberList(dynamic value) {
+    if (value is! List) {
+      return [];
+    }
+
+    return value.whereType<num>().map((num item) => item.toDouble()).toList();
+  }
+
+  double maxValue(List<double> values) {
+    if (values.isEmpty) {
+      return 0.0;
+    }
+
+    return values.reduce(max);
   }
 
   double mean(List<double> values) {
@@ -717,109 +845,116 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
             gameWidth = constraints.maxWidth;
             gameHeight = constraints.maxHeight;
 
-            return GestureDetector(
+            return Listener(
               behavior: HitTestBehavior.opaque,
-              onPanStart: handlePanStart,
-              onPanUpdate: handlePanUpdate,
-              onPanEnd: handlePanEnd,
-              onPanCancel: handlePanCancel,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/bubble_game/GAMEBG.jpg',
-                    fit: BoxFit.cover,
-                  ),
-
-                  for (final _FloatingBubble bubble in bubbles)
-                    Positioned(
-                      left: bubble.x - bubble.radius,
-                      top: bubble.y - bubble.radius,
-                      width: bubble.radius * 2,
-                      height: bubble.radius * 2,
-                      child: Image.asset(
-                        'assets/bubble_game/bubble.png',
-                        fit: BoxFit.contain,
-                      ),
+              onPointerDown: handlePointerDown,
+              onPointerMove: handlePointerMove,
+              onPointerUp: handlePointerUp,
+              onPointerCancel: handlePointerCancel,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanStart: handlePanStart,
+                onPanUpdate: handlePanUpdate,
+                onPanEnd: handlePanEnd,
+                onPanCancel: handlePanCancel,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      'assets/bubble_game/GAMEBG.jpg',
+                      fit: BoxFit.cover,
                     ),
 
-                  for (final _Particle particle in particles)
-                    Positioned(
-                      left: particle.x - particle.radius,
-                      top: particle.y - particle.radius,
-                      child: Opacity(
-                        opacity: particle.opacity,
-                        child: Container(
-                          width: particle.radius * 2,
-                          height: particle.radius * 2,
-                          decoration: BoxDecoration(
-                            color: particle.color,
-                            shape: BoxShape.circle,
+                    for (final _FloatingBubble bubble in bubbles)
+                      Positioned(
+                        left: bubble.x - bubble.radius,
+                        top: bubble.y - bubble.radius,
+                        width: bubble.radius * 2,
+                        height: bubble.radius * 2,
+                        child: Image.asset(
+                          'assets/bubble_game/bubble.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+
+                    for (final _Particle particle in particles)
+                      Positioned(
+                        left: particle.x - particle.radius,
+                        top: particle.y - particle.radius,
+                        child: Opacity(
+                          opacity: particle.opacity,
+                          child: Container(
+                            width: particle.radius * 2,
+                            height: particle.radius * 2,
+                            decoration: BoxDecoration(
+                              color: particle.color,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
                       ),
-                    ),
 
-                  if (introVisible)
-                    _IntroOverlay(
-                      onSkip: () {
-                        setState(() {
-                          introVisible = false;
-                        });
-                      },
-                    ),
+                    if (introVisible)
+                      _IntroOverlay(
+                        onSkip: () {
+                          setState(() {
+                            introVisible = false;
+                          });
+                        },
+                      ),
 
-                  if (!gameStarted && !gameFinished && !introVisible)
-                    Center(
-                      child: ElevatedButton(
-                        onPressed: startGame,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 18,
+                    if (!gameStarted && !gameFinished && !introVisible)
+                      Center(
+                        child: ElevatedButton(
+                          onPressed: startGame,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 18,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                          textStyle: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
+                          child: const Text('Start Bubble Game'),
                         ),
-                        child: const Text('Start Bubble Game'),
                       ),
-                    ),
 
-                  if (gameStarted)
-                    Positioned(
-                      left: 20,
-                      top: 20,
-                      child: _HudText(
-                        text: 'Score: $score',
-                        color: const Color(0xFFFFE632),
-                        alignRight: false,
+                    if (gameStarted)
+                      Positioned(
+                        left: 20,
+                        top: 20,
+                        child: _HudText(
+                          text: 'Score: $score',
+                          color: const Color(0xFFFFE632),
+                          alignRight: false,
+                        ),
                       ),
-                    ),
 
-                  if (gameStarted)
-                    Positioned(
-                      right: 20,
-                      top: 20,
-                      child: _HudText(
-                        text: 'Time: ${timeLeftRounded}s',
-                        color: timeLeft <= 10
-                            ? const Color(0xFFFF4040)
-                            : const Color(0xFFFF78B4),
-                        alignRight: true,
+                    if (gameStarted)
+                      Positioned(
+                        right: 20,
+                        top: 20,
+                        child: _HudText(
+                          text: 'Time: ${timeLeftRounded}s',
+                          color: timeLeft <= 10
+                              ? const Color(0xFFFF4040)
+                              : const Color(0xFFFF78B4),
+                          alignRight: true,
+                        ),
                       ),
-                    ),
 
-                  if (saving)
-                    Container(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
+                    if (saving)
+                      Container(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
 
-                  if (gameFinished && !saving)
-                    _EndOverlay(score: score, onContinue: goToSummary),
-                ],
+                    if (gameFinished && !saving)
+                      _EndOverlay(score: score, onContinue: goToSummary),
+                  ],
+                ),
               ),
             );
           },
