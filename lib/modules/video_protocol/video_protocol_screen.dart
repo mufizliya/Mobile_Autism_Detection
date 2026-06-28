@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-
+import 'framewise_log_exporter.dart';
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import 'stimulus_protocol_service.dart';
@@ -142,6 +142,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       updates: {
         'updated_at': DateTime.now().toIso8601String(),
         'completed_modules': ['child_info', 'scq', 'video_protocol_raw_files'],
+        
         'files': {
           SessionFileNames.childInfo: true,
           SessionFileNames.scqResults: true,
@@ -285,6 +286,15 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     } catch (error) {
       framewisePayload = {'error': error.toString()};
     }
+    Map<String, dynamic>? framewiseExportSummary;
+
+    if (framewisePayload['frames'] is List) {
+      framewiseExportSummary = await FramewiseLogExporter.exportPerStimulusLogs(
+        sessionDir: widget.sessionDir,
+        framewiseSignals: framewisePayload,
+        timeline: timeline,
+      );
+    }
 
     final VideoPlayerController? currentController = controller;
 
@@ -296,6 +306,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       'framewise_recording_attached': true,
       'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
       'framewise_face_signals_summary': framewisePayload['summary'],
+      'framewise_csv_export': framewiseExportSummary,
       'status': 'completed',
       'started_at': playbackStartedAt?.toIso8601String(),
       'completed_at': playbackCompletedAt?.toIso8601String(),
