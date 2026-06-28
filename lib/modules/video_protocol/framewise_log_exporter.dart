@@ -49,9 +49,7 @@ class FramewiseLogExporter {
         continue;
       }
 
-      final double globalStartSec = _number(
-        item['global_start_sec'],
-      );
+      final double globalStartSec = _number(item['global_start_sec']);
 
       final double globalEndSec = _number(
         item['global_end_sec'],
@@ -75,12 +73,12 @@ class FramewiseLogExporter {
           stimulus['category']?.toString() ??
           'unknown';
 
-      final List<Map<String, dynamic>> stimulusFrames = frames.where(
-        (Map<String, dynamic> frame) {
-          final double elapsedSec = _number(frame['time_ms']) / 1000.0;
-          return elapsedSec >= globalStartSec && elapsedSec <= globalEndSec;
-        },
-      ).toList();
+      final List<Map<String, dynamic>> stimulusFrames = frames.where((
+        Map<String, dynamic> frame,
+      ) {
+        final double elapsedSec = _number(frame['time_ms']) / 1000.0;
+        return elapsedSec >= globalStartSec && elapsedSec <= globalEndSec;
+      }).toList();
 
       final List<List<dynamic>> csvRows = _buildRows(
         frames: stimulusFrames,
@@ -89,9 +87,7 @@ class FramewiseLogExporter {
         paperCategory: paperCategory,
       );
 
-      final String csvFileName = SessionFileNames.framewiseLogCsv(
-        stimulusId,
-      );
+      final String csvFileName = SessionFileNames.framewiseLogCsv(stimulusId);
 
       await SessionService.saveCsv(
         sessionDir: sessionDir,
@@ -173,8 +169,8 @@ class FramewiseLogExporter {
       final String blinkState = avgEye == null
           ? 'unknown'
           : eyeOpen
-              ? 'open'
-              : 'closed';
+          ? 'open'
+          : 'closed';
 
       final Map<String, dynamic>? box = _box(frame['bounding_box']);
 
@@ -213,9 +209,12 @@ class FramewiseLogExporter {
         previousMovement = headMovement;
       }
 
-      final double? smiling = _nullableNumber(
-        frame['smiling_probability'],
-      );
+      final double? smiling = _nullableNumber(frame['smiling_probability']);
+
+      final double? mouthOpenSignal =
+          _nullableNumber(frame['mouth_open_signal']) ?? smiling;
+
+      final double? eyebrowSignal = _nullableNumber(frame['eyebrow_signal']);
 
       rows.add([
         frame['timestamp_ms'],
@@ -239,8 +238,8 @@ class FramewiseLogExporter {
         _roundNullable(centerY),
         _roundNullable(headMovement),
         _roundNullable(headAcceleration),
-        _roundNullable(smiling),
-        '',
+        _roundNullable(mouthOpenSignal),
+        _roundNullable(eyebrowSignal),
       ]);
     }
 
@@ -258,31 +257,32 @@ class FramewiseLogExporter {
   }) {
     final int totalFrameCount = frames.length;
 
-    final int validFaceFrameCount = frames.where(
-      (Map<String, dynamic> frame) => frame['face_detected'] == true,
-    ).length;
+    final int validFaceFrameCount = frames
+        .where((Map<String, dynamic> frame) => frame['face_detected'] == true)
+        .length;
 
     final double facePresenceRatio = totalFrameCount == 0
         ? 0.0
         : validFaceFrameCount / totalFrameCount;
 
-    final List<double> avgEyes = frames.map(
-      (Map<String, dynamic> frame) {
-        final double? left = _nullableNumber(
-          frame['left_eye_open_probability'],
-        );
+    final List<double> avgEyes = frames
+        .map((Map<String, dynamic> frame) {
+          final double? left = _nullableNumber(
+            frame['left_eye_open_probability'],
+          );
 
-        final double? right = _nullableNumber(
-          frame['right_eye_open_probability'],
-        );
+          final double? right = _nullableNumber(
+            frame['right_eye_open_probability'],
+          );
 
-        if (left == null || right == null) {
-          return null;
-        }
+          if (left == null || right == null) {
+            return null;
+          }
 
-        return (left + right) / 2.0;
-      },
-    ).whereType<double>().toList();
+          return (left + right) / 2.0;
+        })
+        .whereType<double>()
+        .toList();
 
     final int blinkCount = _countBlinks(avgEyes);
 
@@ -292,19 +292,32 @@ class FramewiseLogExporter {
         .toList();
 
     final List<double> pitchValues = frames
-        .map((Map<String, dynamic> frame) => _nullableNumber(frame['head_pitch']))
+        .map(
+          (Map<String, dynamic> frame) => _nullableNumber(frame['head_pitch']),
+        )
         .whereType<double>()
         .toList();
 
     final List<double> rollValues = frames
-        .map((Map<String, dynamic> frame) => _nullableNumber(frame['head_roll']))
+        .map(
+          (Map<String, dynamic> frame) => _nullableNumber(frame['head_roll']),
+        )
         .whereType<double>()
         .toList();
 
-    final List<double> smileValues = frames
+    final List<double> mouthOpenValues = frames
         .map(
           (Map<String, dynamic> frame) =>
+              _nullableNumber(frame['mouth_open_signal']) ??
               _nullableNumber(frame['smiling_probability']),
+        )
+        .whereType<double>()
+        .toList();
+
+    final List<double> eyebrowSignalValues = frames
+        .map(
+          (Map<String, dynamic> frame) =>
+              _nullableNumber(frame['eyebrow_signal']),
         )
         .whereType<double>()
         .toList();
@@ -327,10 +340,15 @@ class FramewiseLogExporter {
       'mean_yaw_proxy': _round4(_mean(yawValues)),
       'mean_pitch_proxy': _round4(_mean(pitchValues)),
       'mean_roll_proxy_deg': _round4(_mean(rollValues)),
-      'mouth_open_proxy_mean': _round4(_mean(smileValues)),
-      'measurement_source': 'mobile_native_mlkit_proxy_to_python_csv',
-      'note':
-          'Generated from mobile framewise_face_signals.json using Python-style CSV columns.',
+      'mouth_open_proxy_mean': _round4(_mean(mouthOpenValues)),
+      'mouth_complexity_proxy': _round4(_std(mouthOpenValues)),
+      'eyebrow_signal_mean': eyebrowSignalValues.isEmpty
+          ? null
+          : _round4(_mean(eyebrowSignalValues)),
+      'eyebrow_complexity_proxy': eyebrowSignalValues.length <= 1
+          ? null
+          : _round4(_std(eyebrowSignalValues)),
+      'measurement_source': 'mobile_native_mlkit_contour_proxy_to_python_csv',
     };
   }
 
@@ -354,9 +372,7 @@ class FramewiseLogExporter {
     return count;
   }
 
-  static Map<String, dynamic> _stimulusFromItem(
-    Map<String, dynamic> item,
-  ) {
+  static Map<String, dynamic> _stimulusFromItem(Map<String, dynamic> item) {
     final dynamic stimulus = item['stimulus'];
 
     if (stimulus is Map) {
@@ -385,10 +401,7 @@ class FramewiseLogExporter {
     return null;
   }
 
-  static double _number(
-    dynamic value, {
-    double fallback = 0.0,
-  }) {
+  static double _number(dynamic value, {double fallback = 0.0}) {
     if (value is num) {
       return value.toDouble();
     }
@@ -418,6 +431,25 @@ class FramewiseLogExporter {
     }
 
     return values.reduce((double a, double b) => a + b) / values.length;
+  }
+
+  static double _std(List<double> values) {
+    if (values.length <= 1) {
+      return 0.0;
+    }
+
+    final double average = _mean(values);
+
+    final double variance =
+        values
+            .map((double value) {
+              final double diff = value - average;
+              return diff * diff;
+            })
+            .reduce((double a, double b) => a + b) /
+        values.length;
+
+    return sqrt(variance);
   }
 
   static double _round4(double value) {

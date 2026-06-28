@@ -18,6 +18,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.graphics.PointF
+import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceContour
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class NativeFaceRecorder(
     private val context: Context
@@ -27,12 +32,12 @@ class NativeFaceRecorder(
 
     private val detector: FaceDetector by lazy {
         val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-            .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
-            .setMinFaceSize(0.12f)
-            .build()
+    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+    .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+    .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+    .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+    .setMinFaceSize(0.12f)
+    .build()
 
         FaceDetection.getClient(options)
     }
@@ -205,6 +210,23 @@ class NativeFaceRecorder(
                         "smiling_probability",
                         face.smilingProbability?.toDouble()
                     )
+                    val mouthOpenSignal = computeMouthOpenSignal(face)
+                    val eyebrowSignal = computeEyebrowSignal(face)
+
+                    frameJson.put(
+                        "mouth_open_signal",
+                        mouthOpenSignal ?: JSONObject.NULL
+                    )
+
+                    frameJson.put(
+                        "eyebrow_signal",
+                        eyebrowSignal ?: JSONObject.NULL
+                    )
+
+                    frameJson.put(
+                        "contour_source",
+                        "mlkit_face_contours"
+                    )
 
                     val boxJson = JSONObject()
                     boxJson.put("left", box.left)
@@ -224,6 +246,9 @@ class NativeFaceRecorder(
                     frameJson.put("left_eye_open_probability", null)
                     frameJson.put("right_eye_open_probability", null)
                     frameJson.put("smiling_probability", null)
+                    frameJson.put("mouth_open_signal", JSONObject.NULL)
+                    frameJson.put("eyebrow_signal", JSONObject.NULL)
+                    frameJson.put("contour_source", JSONObject.NULL)
                     frameJson.put("bounding_box", null)
                 }
 
@@ -237,7 +262,129 @@ class NativeFaceRecorder(
                 imageProxy.close()
             }
     }
+    private fun computeMouthOpenSignal(face: Face): Double? {
+    val upperLipBottom = averagePoint(
+        face.getContour(FaceContour.UPPER_LIP_BOTTOM)?.points
+    )
 
+    val lowerLipTop = averagePoint(
+        face.getContour(FaceContour.LOWER_LIP_TOP)?.points
+    )
+
+    val lipPoints = mutableListOf<PointF>()
+
+    face.getContour(FaceContour.UPPER_LIP_TOP)?.points?.let {
+        lipPoints.addAll(it)
+    }
+
+    face.getContour(FaceContour.UPPER_LIP_BOTTOM)?.points?.let {
+        lipPoints.addAll(it)
+    }
+
+    face.getContour(FaceContour.LOWER_LIP_TOP)?.points?.let {
+        lipPoints.addAll(it)
+    }
+
+    face.getContour(FaceContour.LOWER_LIP_BOTTOM)?.points?.let {
+        lipPoints.addAll(it)
+    }
+
+    if (upperLipBottom == null || lowerLipTop == null || lipPoints.isEmpty()) {
+        return null
+    }
+
+    val minX = lipPoints.minOf { it.x }
+    val maxX = lipPoints.maxOf { it.x }
+
+    val mouthWidth = maxX - minX
+
+    if (mouthWidth <= 1f) {
+        return null
+    }
+
+    val mouthHeight = distance(
+        upperLipBottom,
+        lowerLipTop
+    )
+
+    return mouthHeight / mouthWidth.toDouble()
+}
+
+private fun computeEyebrowSignal(face: Face): Double? {
+    val leftEye = averagePoint(
+        face.getContour(FaceContour.LEFT_EYE)?.points
+    )
+
+    val rightEye = averagePoint(
+        face.getContour(FaceContour.RIGHT_EYE)?.points
+    )
+
+    val leftEyebrow = averagePoint(
+        face.getContour(FaceContour.LEFT_EYEBROW_BOTTOM)?.points
+    )
+
+    val rightEyebrow = averagePoint(
+        face.getContour(FaceContour.RIGHT_EYEBROW_BOTTOM)?.points
+    )
+
+    if (
+        leftEye == null ||
+        rightEye == null ||
+        leftEyebrow == null ||
+        rightEyebrow == null
+    ) {
+        return null
+    }
+
+    val interEyeDistance = distance(
+        leftEye,
+        rightEye
+    )
+
+    if (interEyeDistance <= 1.0) {
+        return null
+    }
+
+    val leftGap = distance(
+        leftEyebrow,
+        leftEye
+    )
+
+    val rightGap = distance(
+        rightEyebrow,
+        rightEye
+    )
+
+    val averageBrowEyeGap = (leftGap + rightGap) / 2.0
+
+    return averageBrowEyeGap / interEyeDistance
+}
+
+private fun averagePoint(points: List<PointF>?): PointF? {
+    if (points.isNullOrEmpty()) {
+        return null
+    }
+
+    val averageX = points.map { it.x }.average().toFloat()
+    val averageY = points.map { it.y }.average().toFloat()
+
+    return PointF(
+        averageX,
+        averageY
+    )
+}
+
+private fun distance(
+    first: PointF,
+    second: PointF,
+): Double {
+    val dx = first.x - second.x
+    val dy = first.y - second.y
+
+    return sqrt(
+        dx.toDouble().pow(2.0) + dy.toDouble().pow(2.0)
+    )
+}
     private fun buildSummary(): JSONObject {
         val summary = JSONObject()
 

@@ -293,9 +293,9 @@ class PaperPhenotypeMapper {
         allSocialLikeStimuli,
         (List<Map<String, String>> rows) => _stdColumn(rows, 'mouth_open'),
       ),
-      source: 'mobile_smile_probability_proxy',
+      source: 'mobile_mlkit_mouth_contour_proxy',
       note:
-          'Proxy for mouth dynamics. Uses standard deviation of ML Kit smiling probability.',
+          'Proxy for paper mouth complexity. Uses standard deviation of normalized ML Kit lip-contour mouth-open signal.',
     );
 
     setFeature(
@@ -305,25 +305,33 @@ class PaperPhenotypeMapper {
         allNonsocialLikeStimuli,
         (List<Map<String, String>> rows) => _stdColumn(rows, 'mouth_open'),
       ),
-      source: 'mobile_smile_probability_proxy',
+      source: 'mobile_mlkit_mouth_contour_proxy',
       note:
-          'Proxy for mouth dynamics. Uses standard deviation of ML Kit smiling probability.',
+          'Proxy for paper mouth complexity. Uses standard deviation of normalized ML Kit lip-contour mouth-open signal.',
     );
 
     setFeature(
       name: PaperFeatureNames.eyebrowComplexitySocialMovies,
-      value: null,
-      source: 'missing_eyebrow_landmarks',
+      value: _meanForStimuli(
+        csvRowsByStimulus,
+        allSocialLikeStimuli,
+        (List<Map<String, String>> rows) => _stdColumn(rows, 'eyebrow_signal'),
+      ),
+      source: 'mobile_mlkit_eyebrow_contour_proxy',
       note:
-          'Paper feature requires eyebrow landmark dynamics. Current ML Kit setup does not export eyebrow landmarks.',
+          'Proxy for paper eyebrow complexity. Uses standard deviation of normalized ML Kit eyebrow-to-eye distance signal.',
     );
 
     setFeature(
       name: PaperFeatureNames.eyebrowComplexityNonsocialMovies,
-      value: null,
-      source: 'missing_eyebrow_landmarks',
+      value: _meanForStimuli(
+        csvRowsByStimulus,
+        allNonsocialLikeStimuli,
+        (List<Map<String, String>> rows) => _stdColumn(rows, 'eyebrow_signal'),
+      ),
+      source: 'mobile_mlkit_eyebrow_contour_proxy',
       note:
-          'Paper feature requires eyebrow landmark dynamics. Current ML Kit setup does not export eyebrow landmarks.',
+          'Proxy for paper eyebrow complexity. Uses standard deviation of normalized ML Kit eyebrow-to-eye distance signal.',
     );
 
     setFeature(
