@@ -31,6 +31,7 @@ dependencies:
   path_provider: ^2.1.5
   video_player: ^2.10.0
   permission_handler: ^12.0.1
+  audioplayers: ^6.5.1
   flutter:
     sdk: flutter
     
@@ -64,6 +65,11 @@ flutter:
     - assets/stimuli/stimulus_schedule.json
     - assets/stimuli/master/stimulus_master_timeline.json
     - assets/stimuli/master/stimulus_master_protocol_cued.mp4
+    - assets/bubble_game/GAMEBG.jpg
+    - assets/bubble_game/character.png
+    - assets/bubble_game/bubble.png
+    - assets/bubble_game/music.mp3
+    - assets/bubble_game/pop.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -8,6 +8,7 @@ import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import 'stimulus_protocol_service.dart';
 import '../../native/native_face_recorder_service.dart';
+import '../bubble_game/bubble_game_screen.dart';
 
 class VideoProtocolScreen extends StatefulWidget {
   const VideoProtocolScreen({
@@ -142,7 +143,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       updates: {
         'updated_at': DateTime.now().toIso8601String(),
         'completed_modules': ['child_info', 'scq', 'video_protocol_raw_files'],
-        
+
         'files': {
           SessionFileNames.childInfo: true,
           SessionFileNames.scqResults: true,
@@ -481,6 +482,25 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
                           isPlaying
                               ? 'Pause video'
                               : 'Play master protocol video',
+                        ),
+                      ),
+                    if (playbackCompleted)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (BuildContext context) {
+                                  return BubbleGameScreen(
+                                    sessionDir: widget.sessionDir,
+                                    childInfo: widget.childInfo,
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                          child: const Text('Continue to bubble game'),
                         ),
                       ),
 

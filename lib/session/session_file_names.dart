@@ -12,6 +12,8 @@ class SessionFileNames {
   static const String parentNameCallCues = 'parent_name_call_cues.srt';
 
   static const String gameMetrics = 'game_metrics.json';
+  static const String bubbleGameReactions =
+    'bubble_game_reactions.csv';
 
   // Extractor output files
   static const String phenotypeVector = 'phenotype_vector.json';
