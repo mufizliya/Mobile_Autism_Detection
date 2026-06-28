@@ -38,7 +38,19 @@ android {
         }
     }
 }
+dependencies {
+    val cameraxVersion = "1.4.2"
 
+implementation("androidx.camera:camera-core:$cameraxVersion")
+implementation("androidx.camera:camera-camera2:$cameraxVersion")
+implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+
+implementation("com.google.mlkit:face-detection:16.1.7")
+implementation("com.google.guava:guava:33.2.1-android")
+}
+configurations.configureEach {
+    resolutionStrategy.force("com.google.guava:guava:33.2.1-android")
+}
 flutter {
     source = "../.."
 }

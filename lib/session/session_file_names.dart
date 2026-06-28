@@ -5,6 +5,8 @@ class SessionFileNames {
 
   static const String videoTest = 'video_test.json';
   static const String stimulusEvents = 'stimulus_events.json';
+  static const String framewiseFaceSignals =
+    'framewise_face_signals.json';
   static const String stimulusProtocolSummary =
       'stimulus_protocol_summary.json';
   static const String parentNameCallCues = 'parent_name_call_cues.srt';

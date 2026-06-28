@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import 'stimulus_protocol_service.dart';
+import '../../native/native_face_recorder_service.dart';
 
 class VideoProtocolScreen extends StatefulWidget {
   const VideoProtocolScreen({
@@ -67,17 +68,14 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
         StimulusProtocolService.timelineFromMaster(masterTimeline);
 
     final List<Map<String, dynamic>> parsedScheduledEvents =
-        StimulusProtocolService.collectScheduledNameCallEvents(
-      parsedTimeline,
-    );
+        StimulusProtocolService.collectScheduledNameCallEvents(parsedTimeline);
 
     final List<Map<String, dynamic>> parsedTriggeredEvents =
         StimulusProtocolService.buildTriggeredNameCallEvents(
-      parsedScheduledEvents,
-    );
+          parsedScheduledEvents,
+        );
 
-    final String childName =
-        widget.childInfo['name']?.toString().trim() ?? '';
+    final String childName = widget.childInfo['name']?.toString().trim() ?? '';
 
     final String parentCueSrt = StimulusProtocolService.buildParentCueSrt(
       timeline: parsedTimeline,
@@ -86,10 +84,10 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
     final Map<String, dynamic> protocolSummary =
         StimulusProtocolService.buildProtocolSummary(
-      schedule: schedule,
-      masterTimeline: masterTimeline,
-      triggeredEvents: parsedTriggeredEvents,
-    );
+          schedule: schedule,
+          masterTimeline: masterTimeline,
+          triggeredEvents: parsedTriggeredEvents,
+        );
 
     final Map<String, dynamic> stimulusEvents = {
       'scheduled_name_call_events': parsedScheduledEvents,
@@ -98,10 +96,10 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
     final Map<String, dynamic> videoTest =
         StimulusProtocolService.buildVideoTestSkeleton(
-      schedule: schedule,
-      masterTimeline: masterTimeline,
-      triggeredEvents: parsedTriggeredEvents,
-    );
+          schedule: schedule,
+          masterTimeline: masterTimeline,
+          triggeredEvents: parsedTriggeredEvents,
+        );
 
     await SessionService.saveJson(
       sessionDir: widget.sessionDir,
@@ -124,13 +122,9 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     await SessionService.fileInSession(
       sessionDir: widget.sessionDir,
       fileName: SessionFileNames.parentNameCallCues,
-    ).writeAsString(
-      parentCueSrt,
-      flush: true,
-    );
+    ).writeAsString(parentCueSrt, flush: true);
 
-    final VideoPlayerController newController =
-        VideoPlayerController.asset(
+    final VideoPlayerController newController = VideoPlayerController.asset(
       StimulusProtocolService.masterVideoAssetPath,
     );
 
@@ -147,11 +141,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       fileName: SessionFileNames.finalSession,
       updates: {
         'updated_at': DateTime.now().toIso8601String(),
-        'completed_modules': [
-          'child_info',
-          'scq',
-          'video_protocol_raw_files',
-        ],
+        'completed_modules': ['child_info', 'scq', 'video_protocol_raw_files'],
         'files': {
           SessionFileNames.childInfo: true,
           SessionFileNames.scqResults: true,
@@ -175,7 +165,8 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
       isPreparing = false;
       isPrepared = true;
-      status = 'Raw video protocol files generated and master video loaded.\n'
+      status =
+          'Raw video protocol files generated and master video loaded.\n'
           'Video stimuli: ${timeline.length}\n'
           'Scheduled name calls: ${scheduledEvents.length}\n'
           'Triggered name calls: ${triggeredEvents.length}\n\n'
@@ -194,10 +185,12 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     playbackCompletedAt = null;
     playbackCompleted = false;
 
+    await NativeFaceRecorderService.start();
     await currentController.seekTo(Duration.zero);
     await currentController.play();
 
     cueTimer?.cancel();
+
     cueTimer = Timer.periodic(
       const Duration(milliseconds: 150),
       (_) => updateParentCue(),
@@ -218,8 +211,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
         'mobile_playback': {
           'status': 'started',
           'started_at': playbackStartedAt!.toIso8601String(),
-          'master_video_asset':
-              StimulusProtocolService.masterVideoAssetPath,
+          'master_video_asset': StimulusProtocolService.masterVideoAssetPath,
         },
       },
     );
@@ -253,15 +245,12 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     final double currentSec =
         currentController.value.position.inMilliseconds / 1000.0;
 
-    final String childName =
-        widget.childInfo['name']?.toString().trim() ?? '';
+    final String childName = widget.childInfo['name']?.toString().trim() ?? '';
 
     String cue = '';
 
     for (final Map<String, dynamic> event in scheduledEvents) {
-      final double callTime = toDouble(
-        event['global_call_time_sec'],
-      );
+      final double callTime = toDouble(event['global_call_time_sec']);
 
       if (currentSec >= callTime && currentSec <= callTime + 1.5) {
         cue = childName.isNotEmpty
@@ -287,6 +276,15 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     playbackCompletedAt = DateTime.now();
 
     cueTimer?.cancel();
+    Map<String, dynamic>? framewisePayload;
+
+    try {
+      framewisePayload = await NativeFaceRecorderService.stopAndSave(
+        sessionDir: widget.sessionDir,
+      );
+    } catch (error) {
+      framewisePayload = {'error': error.toString()};
+    }
 
     final VideoPlayerController? currentController = controller;
 
@@ -295,22 +293,20 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
         : currentController.value.duration.inMilliseconds / 1000.0;
 
     final Map<String, dynamic> playbackSummary = {
+      'framewise_recording_attached': true,
+      'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
+      'framewise_face_signals_summary': framewisePayload['summary'],
       'status': 'completed',
       'started_at': playbackStartedAt?.toIso8601String(),
       'completed_at': playbackCompletedAt?.toIso8601String(),
       'duration_sec': double.parse(durationSec.toStringAsFixed(3)),
       'master_video_asset': StimulusProtocolService.masterVideoAssetPath,
-      'framewise_recording_attached': false,
-      'note':
-          'Video playback completed. Native framewise recording will be added in the next step.',
     };
 
     await SessionService.updateJson(
       sessionDir: widget.sessionDir,
       fileName: SessionFileNames.videoTest,
-      updates: {
-        'mobile_playback': playbackSummary,
-      },
+      updates: {'mobile_playback': playbackSummary},
     );
 
     await SessionService.updateJson(
@@ -333,16 +329,15 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     setState(() {
       isPlaying = false;
       activeParentCue = '';
-      status = 'Master video playback completed.\n\n'
+      status =
+          'Master video playback completed.\n\n'
           'Next step will attach mobile framewise recorder and generate '
           'Python-style per-stimulus CSV logs.';
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Video playback completed.'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Video playback completed.')));
   }
 
   void handleVideoState() {
@@ -375,17 +370,14 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String childName =
-        widget.childInfo['name']?.toString().trim() ?? '';
+    final String childName = widget.childInfo['name']?.toString().trim() ?? '';
 
     final VideoPlayerController? currentController = controller;
     final bool videoReady =
         currentController != null && currentController.value.isInitialized;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Video Protocol'),
-      ),
+      appBar: AppBar(title: const Text('Video Protocol')),
       body: SafeArea(
         child: Column(
           children: [
@@ -449,9 +441,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
                           color: Colors.black12,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text(
-                          'Master video not loaded yet.',
-                        ),
+                        child: const Text('Master video not loaded yet.'),
                       ),
 
                     const SizedBox(height: 20),
@@ -462,9 +452,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : Text(
                               isPrepared
@@ -479,7 +467,9 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
                       ElevatedButton(
                         onPressed: isPlaying ? pauseVideo : playVideo,
                         child: Text(
-                          isPlaying ? 'Pause video' : 'Play master protocol video',
+                          isPlaying
+                              ? 'Pause video'
+                              : 'Play master protocol video',
                         ),
                       ),
 
