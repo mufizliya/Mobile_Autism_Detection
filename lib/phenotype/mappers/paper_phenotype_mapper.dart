@@ -651,7 +651,7 @@ class PaperPhenotypeMapper {
   }) {
     final dynamic rawEvents = stimulusEvents == null
         ? null
-        : stimulusEvents['scheduled_name_call_events'];
+        : stimulusEvents['triggered_name_call_events'];
 
     if (rawEvents is! List) {
       return {
@@ -679,7 +679,13 @@ class PaperPhenotypeMapper {
           event['during_stimulus']?.toString() ??
           '';
 
-      final double callTimeSec = _toDouble(event['global_call_time_sec']);
+      final dynamic actualTriggerTime = event['actual_global_trigger_time_sec'];
+
+      if (actualTriggerTime == null) {
+        continue;
+      }
+
+      final double callTimeSec = _toDouble(actualTriggerTime);
 
       final List<Map<String, String>> rows =
           csvRowsByStimulus[stimulusId] ?? [];
