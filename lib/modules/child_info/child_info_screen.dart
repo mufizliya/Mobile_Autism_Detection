@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../modules/scq/scq_screen.dart';
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 
@@ -15,22 +16,20 @@ class ChildInfoScreen extends StatefulWidget {
 class _ChildInfoScreenState extends State<ChildInfoScreen> {
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
-  final TextEditingController childNameController = TextEditingController();
-  final TextEditingController ageYearsController = TextEditingController();
-  final TextEditingController ageMonthsController = TextEditingController();
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController ageController = TextEditingController();
 
+  String selectedGender = 'Male';
   bool isSaving = false;
-  Directory? createdSessionDir;
 
   @override
   void dispose() {
-    childNameController.dispose();
-    ageYearsController.dispose();
-    ageMonthsController.dispose();
+    nameController.dispose();
+    ageController.dispose();
     super.dispose();
   }
 
-  Future<void> saveChildInfo() async {
+  Future<void> saveAndContinue() async {
     if (!formKey.currentState!.validate()) {
       return;
     }
@@ -39,31 +38,16 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
       isSaving = true;
     });
 
-    final String childName = childNameController.text.trim();
-
-    final int ageYears = int.parse(
-      ageYearsController.text.trim(),
-    );
-
-    final int ageMonthsExtra = int.parse(
-      ageMonthsController.text.trim(),
-    );
-
-    final int totalAgeMonths = (ageYears * 12) + ageMonthsExtra;
-
-    final Directory sessionDir = await SessionService.createSessionDir();
-
-    final String generatedAt = DateTime.now().toIso8601String();
+    final String timestamp = DateTime.now().toIso8601String();
 
     final Map<String, dynamic> childInfo = {
-      'schema_version': 'python_mobile_replica_child_info_v1',
-      'generated_at': generatedAt,
-      'child_name': childName,
-      'age_years': ageYears,
-      'age_months_extra': ageMonthsExtra,
-      'age_months_total': totalAgeMonths,
-      'source': 'mobile_replica',
+      'name': nameController.text.trim(),
+      'age': ageController.text.trim(),
+      'gender': selectedGender,
+      'timestamp': timestamp,
     };
+
+    final Directory sessionDir = await SessionService.createSessionDir();
 
     await SessionService.saveJson(
       sessionDir: sessionDir,
@@ -75,9 +59,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
       sessionDir: sessionDir,
       fileName: SessionFileNames.finalSession,
       data: {
-        'schema_version': 'python_mobile_replica_final_session_v1',
-        'created_at': generatedAt,
-        'updated_at': generatedAt,
+        'created_at': timestamp,
+        'updated_at': timestamp,
         'session_dir': sessionDir.path,
         'completed_modules': [
           'child_info',
@@ -89,33 +72,35 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
       },
     );
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       isSaving = false;
-      createdSessionDir = sessionDir;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Child info saved. Session created.'),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (BuildContext context) {
+          return ScqScreen(
+            sessionDir: sessionDir,
+            childInfo: childInfo,
+          );
+        },
       ),
     );
   }
 
-  String? validateRequiredText(String? value) {
+  String? validateName(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Required';
+      return 'Please enter the child name';
     }
 
     return null;
   }
 
-  String? validateAgeYears(String? value) {
+  String? validateAge(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Required';
+      return 'Please enter age';
     }
 
     final int? parsed = int.tryParse(value.trim());
@@ -124,26 +109,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
       return 'Enter a number';
     }
 
-    if (parsed < 0 || parsed > 10) {
-      return 'Enter age years between 0 and 10';
-    }
-
-    return null;
-  }
-
-  String? validateAgeMonths(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Required';
-    }
-
-    final int? parsed = int.tryParse(value.trim());
-
-    if (parsed == null) {
-      return 'Enter a number';
-    }
-
-    if (parsed < 0 || parsed > 11) {
-      return 'Enter extra months between 0 and 11';
+    if (parsed < 2 || parsed > 18) {
+      return 'Python app range is 2 to 18';
     }
 
     return null;
@@ -151,11 +118,9 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasSession = createdSessionDir != null;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Child Information'),
+        title: const Text('Child Information Entry'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -166,58 +131,75 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Enter child details',
+                  'Child Information Entry',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'This creates the session folder and saves child_info.json.',
-                ),
+
                 const SizedBox(height: 24),
 
                 TextFormField(
-                  controller: childNameController,
+                  controller: nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Child name',
+                    labelText: 'Full Name',
+                    hintText: 'Enter full name',
                     border: OutlineInputBorder(),
                   ),
                   textInputAction: TextInputAction.next,
-                  validator: validateRequiredText,
+                  validator: validateName,
                 ),
 
                 const SizedBox(height: 16),
 
                 TextFormField(
-                  controller: ageYearsController,
+                  controller: ageController,
                   decoration: const InputDecoration(
-                    labelText: 'Age - years',
+                    labelText: 'Age',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
-                  validator: validateAgeYears,
+                  validator: validateAge,
                 ),
 
                 const SizedBox(height: 16),
 
-                TextFormField(
-                  controller: ageMonthsController,
+                DropdownButtonFormField<String>(
+                  initialValue: selectedGender,
                   decoration: const InputDecoration(
-                    labelText: 'Extra months',
-                    helperText: 'Example: 2 years 6 months → years = 2, months = 6',
+                    labelText: 'Gender',
                     border: OutlineInputBorder(),
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: validateAgeMonths,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'Male',
+                      child: Text('Male'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Female',
+                      child: Text('Female'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Other',
+                      child: Text('Other'),
+                    ),
+                  ],
+                  onChanged: isSaving
+                      ? null
+                      : (String? value) {
+                          setState(() {
+                            selectedGender = value ?? 'Male';
+                          });
+                        },
                 ),
 
                 const SizedBox(height: 24),
 
                 ElevatedButton(
-                  onPressed: isSaving ? null : saveChildInfo,
+                  onPressed: isSaving ? null : saveAndContinue,
                   child: isSaving
                       ? const SizedBox(
                           width: 22,
@@ -226,20 +208,8 @@ class _ChildInfoScreenState extends State<ChildInfoScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text('Save and create session'),
+                      : const Text('Submit Information'),
                 ),
-
-                const SizedBox(height: 24),
-
-                if (hasSession)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: SelectableText(
-                        'Session created:\n${createdSessionDir!.path}',
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
