@@ -37,8 +37,8 @@ class NativeIrisRecorder(
     private var lastProcessedAtMs = 0L
     private var frameIndex = 0
 
-    private val processEveryMs = 500L
-    private val maxFrames = 120
+    private val processEveryMs = 250L
+    private val maxFrames = 300
 
     private val frames = mutableListOf<JSONObject>()
 

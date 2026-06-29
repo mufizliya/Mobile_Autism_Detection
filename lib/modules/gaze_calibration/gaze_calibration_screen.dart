@@ -24,7 +24,7 @@ class GazeCalibrationScreen extends StatefulWidget {
 }
 
 class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
-  static const int dotDurationMs = 1500;
+  static const int dotDurationMs = 2500;
   static const int introDurationMs = 1500;
 
   final Stopwatch stopwatch = Stopwatch();
@@ -40,51 +40,15 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
   int currentTargetIndex = -1;
 
   final List<Map<String, dynamic>> targets = const [
-    {
-      'id': 'top_left',
-      'target_x': 0.15,
-      'target_y': 0.15,
-    },
-    {
-      'id': 'top_center',
-      'target_x': 0.50,
-      'target_y': 0.15,
-    },
-    {
-      'id': 'top_right',
-      'target_x': 0.85,
-      'target_y': 0.15,
-    },
-    {
-      'id': 'middle_left',
-      'target_x': 0.15,
-      'target_y': 0.50,
-    },
-    {
-      'id': 'center',
-      'target_x': 0.50,
-      'target_y': 0.50,
-    },
-    {
-      'id': 'middle_right',
-      'target_x': 0.85,
-      'target_y': 0.50,
-    },
-    {
-      'id': 'bottom_left',
-      'target_x': 0.15,
-      'target_y': 0.85,
-    },
-    {
-      'id': 'bottom_center',
-      'target_x': 0.50,
-      'target_y': 0.85,
-    },
-    {
-      'id': 'bottom_right',
-      'target_x': 0.85,
-      'target_y': 0.85,
-    },
+    {'id': 'top_left', 'target_x': 0.15, 'target_y': 0.15},
+    {'id': 'top_center', 'target_x': 0.50, 'target_y': 0.15},
+    {'id': 'top_right', 'target_x': 0.85, 'target_y': 0.15},
+    {'id': 'middle_left', 'target_x': 0.15, 'target_y': 0.50},
+    {'id': 'center', 'target_x': 0.50, 'target_y': 0.50},
+    {'id': 'middle_right', 'target_x': 0.85, 'target_y': 0.50},
+    {'id': 'bottom_left', 'target_x': 0.15, 'target_y': 0.85},
+    {'id': 'bottom_center', 'target_x': 0.50, 'target_y': 0.85},
+    {'id': 'bottom_right', 'target_x': 0.85, 'target_y': 0.85},
   ];
 
   @override
@@ -121,12 +85,9 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
 
     timer?.cancel();
 
-    timer = Timer.periodic(
-      const Duration(milliseconds: 100),
-      (_) {
-        updateTarget();
-      },
-    );
+    timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      updateTarget();
+    });
 
     if (!mounted) return;
 
@@ -221,11 +182,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
       fileName: SessionFileNames.finalSession,
       updates: {
         'updated_at': DateTime.now().toIso8601String(),
-        'completed_modules': [
-          'child_info',
-          'scq',
-          'gaze_calibration',
-        ],
+        'completed_modules': ['child_info', 'scq', 'gaze_calibration'],
         'files': {
           SessionFileNames.childInfo: true,
           SessionFileNames.scqResults: true,
@@ -253,9 +210,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
   Map<String, dynamic> buildCalibration({
     required Map<String, dynamic> rawPayload,
   }) {
-    final List<Map<String, dynamic>> frames = listMap(
-      rawPayload['frames'],
-    );
+    final List<Map<String, dynamic>> frames = listMap(rawPayload['frames']);
 
     final List<Map<String, dynamic>> calibrationPoints = [];
 
@@ -265,83 +220,80 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
       final int startMs = introDurationMs + i * dotDurationMs;
       final int endMs = startMs + dotDurationMs;
 
-      final List<Map<String, dynamic>> targetFrames = frames.where(
-        (Map<String, dynamic> frame) {
-          final double timeMs = number(frame['time_ms']);
-          return timeMs >= startMs && timeMs < endMs;
-        },
-      ).toList();
+      final List<Map<String, dynamic>> targetFrames = frames.where((
+        Map<String, dynamic> frame,
+      ) {
+        final double timeMs = number(frame['time_ms']);
+        return timeMs >= startMs && timeMs < endMs;
+      }).toList();
 
-      final List<Map<String, dynamic>> validFrames = targetFrames.where(
-        (Map<String, dynamic> frame) {
-          final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
-          return frame['face_detected'] == true &&
-              iris != null &&
-              iris['has_iris_landmarks'] == true;
-        },
-      ).toList();
+      final List<Map<String, dynamic>> validFrames = targetFrames.where((
+        Map<String, dynamic> frame,
+      ) {
+        final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
+        return frame['face_detected'] == true &&
+            iris != null &&
+            iris['has_iris_landmarks'] == true;
+      }).toList();
 
       final List<double> averageIrisXValues = validFrames
-          .map(
-            (Map<String, dynamic> frame) {
-              final Map<String, dynamic>? iris = mapOrNull(
-                frame['iris_signals'],
-              );
+          .map((Map<String, dynamic> frame) {
+            final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
 
-              return nullableNumber(iris?['average_iris_in_eye_x']);
-            },
-          )
+            return nullableNumber(iris?['average_iris_in_eye_x']);
+          })
           .whereType<double>()
           .toList();
 
       final List<double> leftIrisXValues = validFrames
-          .map(
-            (Map<String, dynamic> frame) {
-              final Map<String, dynamic>? iris = mapOrNull(
-                frame['iris_signals'],
-              );
+          .map((Map<String, dynamic> frame) {
+            final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
 
-              return nullableNumber(iris?['left_iris_in_eye_x']);
-            },
-          )
+            return nullableNumber(iris?['left_iris_in_eye_x']);
+          })
           .whereType<double>()
           .toList();
 
       final List<double> rightIrisXValues = validFrames
-          .map(
-            (Map<String, dynamic> frame) {
-              final Map<String, dynamic>? iris = mapOrNull(
-                frame['iris_signals'],
-              );
+          .map((Map<String, dynamic> frame) {
+            final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
 
-              return nullableNumber(iris?['right_iris_in_eye_x']);
-            },
-          )
+            return nullableNumber(iris?['right_iris_in_eye_x']);
+          })
+          .whereType<double>()
+          .toList();
+
+      final List<double> irisCenterXValues = validFrames
+          .map((Map<String, dynamic> frame) {
+            final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
+
+            final double? leftX = nullableNumber(iris?['left_iris_center_x']);
+
+            final double? rightX = nullableNumber(iris?['right_iris_center_x']);
+
+            if (leftX == null || rightX == null) {
+              return null;
+            }
+
+            return (leftX + rightX) / 2.0;
+          })
           .whereType<double>()
           .toList();
 
       final List<double> irisCenterYValues = validFrames
-          .map(
-            (Map<String, dynamic> frame) {
-              final Map<String, dynamic>? iris = mapOrNull(
-                frame['iris_signals'],
-              );
+          .map((Map<String, dynamic> frame) {
+            final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
 
-              final double? leftY = nullableNumber(
-                iris?['left_iris_center_y'],
-              );
+            final double? leftY = nullableNumber(iris?['left_iris_center_y']);
 
-              final double? rightY = nullableNumber(
-                iris?['right_iris_center_y'],
-              );
+            final double? rightY = nullableNumber(iris?['right_iris_center_y']);
 
-              if (leftY == null || rightY == null) {
-                return null;
-              }
+            if (leftY == null || rightY == null) {
+              return null;
+            }
 
-              return (leftY + rightY) / 2.0;
-            },
-          )
+            return (leftY + rightY) / 2.0;
+          })
           .whereType<double>()
           .toList();
 
@@ -362,24 +314,43 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
         'mean_right_iris_in_eye_x': rightIrisXValues.isEmpty
             ? null
             : round4(mean(rightIrisXValues)),
+        'mean_iris_center_x': irisCenterXValues.isEmpty
+            ? null
+            : round4(mean(irisCenterXValues)),
         'mean_iris_center_y': irisCenterYValues.isEmpty
             ? null
             : round4(mean(irisCenterYValues)),
       });
     }
 
-    final List<Map<String, dynamic>> validPoints = calibrationPoints.where(
-      (Map<String, dynamic> point) {
-        return point['mean_average_iris_in_eye_x'] != null &&
-            point['mean_iris_center_y'] != null;
-      },
-    ).toList();
+    final List<Map<String, dynamic>> validPoints = calibrationPoints.where((
+      Map<String, dynamic> point,
+    ) {
+      return point['mean_average_iris_in_eye_x'] != null &&
+          point['mean_iris_center_y'] != null;
+    }).toList();
 
-    final Map<String, dynamic> xFit = fitLinear(
+    final Map<String, dynamic> xFitIrisInEye = fitLinear(
       points: validPoints,
       inputKey: 'mean_average_iris_in_eye_x',
       targetKey: 'target_x',
     );
+
+    final Map<String, dynamic> xFitIrisCenter = fitLinear(
+      points: validPoints,
+      inputKey: 'mean_iris_center_x',
+      targetKey: 'target_x',
+    );
+
+    final Map<String, dynamic> xFit =
+        number(xFitIrisCenter['rmse']) < number(xFitIrisInEye['rmse'])
+        ? xFitIrisCenter
+        : xFitIrisInEye;
+
+    final String xInput =
+        number(xFitIrisCenter['rmse']) < number(xFitIrisInEye['rmse'])
+        ? 'mean_iris_center_x'
+        : 'mean_average_iris_in_eye_x';
 
     final Map<String, dynamic> yFit = fitLinear(
       points: validPoints,
@@ -400,13 +371,14 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
       'calibration_points': calibrationPoints,
       'mapping': {
         'gaze_x': {
-          'input': 'mean_average_iris_in_eye_x',
+          'input': xInput,
+          'candidate_models': {
+            'mean_average_iris_in_eye_x': xFitIrisInEye,
+            'mean_iris_center_x': xFitIrisCenter,
+          },
           ...xFit,
         },
-        'gaze_y': {
-          'input': 'mean_iris_center_y',
-          ...yFit,
-        },
+        'gaze_y': {'input': 'mean_iris_center_y', ...yFit},
       },
       'usage_note':
           'This maps MediaPipe iris landmark signals to normalized screen gaze coordinates. It is calibration-based, not clinical eye-tracking hardware.',
@@ -417,37 +389,27 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
     required Map<String, dynamic> calibration,
     required Map<String, dynamic> rawPayload,
   }) {
-    final Map<String, dynamic> summary =
-        rawPayload['summary'] is Map
-            ? Map<String, dynamic>.from(rawPayload['summary'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> summary = rawPayload['summary'] is Map
+        ? Map<String, dynamic>.from(rawPayload['summary'] as Map)
+        : <String, dynamic>{};
 
-    final int validTargetCount = intNumber(
-      calibration['valid_target_count'],
-    );
+    final int validTargetCount = intNumber(calibration['valid_target_count']);
 
-    final double facePresenceRatio = number(
-      summary['face_presence_ratio'],
-    );
+    final double facePresenceRatio = number(summary['face_presence_ratio']);
 
-    final double irisPresenceRatio = number(
-      summary['iris_presence_ratio'],
-    );
+    final double irisPresenceRatio = number(summary['iris_presence_ratio']);
 
-    final Map<String, dynamic> mapping =
-        calibration['mapping'] is Map
-            ? Map<String, dynamic>.from(calibration['mapping'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> mapping = calibration['mapping'] is Map
+        ? Map<String, dynamic>.from(calibration['mapping'] as Map)
+        : <String, dynamic>{};
 
-    final Map<String, dynamic> gazeX =
-        mapping['gaze_x'] is Map
-            ? Map<String, dynamic>.from(mapping['gaze_x'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> gazeX = mapping['gaze_x'] is Map
+        ? Map<String, dynamic>.from(mapping['gaze_x'] as Map)
+        : <String, dynamic>{};
 
-    final Map<String, dynamic> gazeY =
-        mapping['gaze_y'] is Map
-            ? Map<String, dynamic>.from(mapping['gaze_y'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> gazeY = mapping['gaze_y'] is Map
+        ? Map<String, dynamic>.from(mapping['gaze_y'] as Map)
+        : <String, dynamic>{};
 
     final double xRmse = number(gazeX['rmse']);
     final double yRmse = number(gazeY['rmse']);
@@ -477,8 +439,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
             'At least 6 valid targets, face/iris presence >= 0.75, and x/y RMSE <= 0.25.',
         'warning':
             'Enough targets and iris data, but calibration error is high.',
-        'failed':
-            'Not enough valid targets or poor face/iris visibility.',
+        'failed': 'Not enough valid targets or poor face/iris visibility.',
       },
     };
   }
@@ -605,7 +566,8 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
       return 1.0;
     }
 
-    final double mse = errors
+    final double mse =
+        errors
             .map((double error) => error * error)
             .reduce((double a, double b) => a + b) /
         errors.length;
@@ -634,26 +596,17 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
   Widget build(BuildContext context) {
     final Map<String, dynamic>? currentTarget =
         currentTargetIndex >= 0 && currentTargetIndex < targets.length
-            ? targets[currentTargetIndex]
-            : null;
+        ? targets[currentTargetIndex]
+        : null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gaze Calibration'),
-      ),
+      appBar: AppBar(title: const Text('Gaze Calibration')),
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (
-            BuildContext context,
-            BoxConstraints constraints,
-          ) {
+          builder: (BuildContext context, BoxConstraints constraints) {
             return Stack(
               children: [
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.white,
-                  ),
-                ),
+                Positioned.fill(child: Container(color: Colors.white)),
 
                 if (currentTarget == null)
                   Center(
@@ -688,10 +641,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
                               child: const Text('Continue to video protocol'),
                             ),
                           const SizedBox(height: 20),
-                          SelectableText(
-                            status,
-                            textAlign: TextAlign.center,
-                          ),
+                          SelectableText(status, textAlign: TextAlign.center),
                         ],
                       ),
                     ),
@@ -699,10 +649,12 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
 
                 if (currentTarget != null)
                   Positioned(
-                    left: constraints.maxWidth *
+                    left:
+                        constraints.maxWidth *
                             number(currentTarget['target_x']) -
                         22,
-                    top: constraints.maxHeight *
+                    top:
+                        constraints.maxHeight *
                             number(currentTarget['target_y']) -
                         22,
                     child: Container(
@@ -711,10 +663,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
                       decoration: BoxDecoration(
                         color: Colors.red,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.black,
-                          width: 4,
-                        ),
+                        border: Border.all(color: Colors.black, width: 4),
                       ),
                     ),
                   ),
@@ -723,9 +672,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
                   Positioned.fill(
                     child: Container(
                       color: Colors.black.withValues(alpha: 0.35),
-                      child: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      child: const Center(child: CircularProgressIndicator()),
                     ),
                   ),
               ],
