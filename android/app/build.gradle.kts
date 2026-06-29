@@ -46,6 +46,7 @@ implementation("androidx.camera:camera-camera2:$cameraxVersion")
 implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
 
 implementation("com.google.mlkit:face-detection:16.1.7")
+implementation("com.google.mediapipe:tasks-vision:0.10.14")
 implementation("com.google.guava:guava:33.2.1-android")
 }
 configurations.configureEach {

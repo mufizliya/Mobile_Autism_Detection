@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import '../../session/session_assembler.dart';
+import '../../native/native_iris_recorder_service.dart';
 
 class SessionSummaryScreen extends StatefulWidget {
   const SessionSummaryScreen({
@@ -23,6 +24,8 @@ class SessionSummaryScreen extends StatefulWidget {
 class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
   Map<String, dynamic>? finalSession;
   bool loading = true;
+  bool irisProbeRunning = false;
+  String irisProbeStatus = '';
 
   @override
   void initState() {
@@ -45,6 +48,42 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
       finalSession = data;
       loading = false;
     });
+  }
+
+  Future<void> startIrisProbe() async {
+    setState(() {
+      irisProbeRunning = true;
+      irisProbeStatus =
+          'Iris probe running. Look at the screen for 10 seconds.';
+    });
+
+    try {
+      await NativeIrisRecorderService.start();
+    } catch (error) {
+      setState(() {
+        irisProbeRunning = false;
+        irisProbeStatus = 'Iris probe start failed: $error';
+      });
+    }
+  }
+
+  Future<void> stopIrisProbe() async {
+    try {
+      final Map<String, dynamic> payload =
+          await NativeIrisRecorderService.stopAndSave(
+            sessionDir: widget.sessionDir,
+          );
+
+      setState(() {
+        irisProbeRunning = false;
+        irisProbeStatus = 'Iris probe saved. Frames: ${payload['frame_count']}';
+      });
+    } catch (error) {
+      setState(() {
+        irisProbeRunning = false;
+        irisProbeStatus = 'Iris probe stop failed: $error';
+      });
+    }
   }
 
   @override
@@ -110,6 +149,31 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Iris Landmark Probe',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      irisProbeStatus.isEmpty
+                          ? 'Use this to test MediaPipe iris/eye landmark extraction.'
+                          : irisProbeStatus,
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: irisProbeRunning
+                          ? stopIrisProbe
+                          : startIrisProbe,
+                      child: Text(
+                        irisProbeRunning
+                            ? 'Stop iris probe'
+                            : 'Start iris probe',
                       ),
                     ),
                     const SizedBox(height: 8),
