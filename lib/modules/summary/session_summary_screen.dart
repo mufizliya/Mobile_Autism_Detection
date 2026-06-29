@@ -67,6 +67,13 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
 
     final String qualityStatus =
         sessionQuality['overall_status']?.toString() ?? 'unknown';
+    final Map<String, dynamic> featureReliability =
+        finalSession?['feature_reliability'] is Map
+        ? Map<String, dynamic>.from(finalSession!['feature_reliability'] as Map)
+        : <String, dynamic>{};
+
+    final String overallReliability =
+        featureReliability['overall_reliability']?.toString() ?? 'unknown';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Session Summary')),
@@ -95,6 +102,22 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Feature Reliability',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SelectableText(
+                      overallReliability,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),

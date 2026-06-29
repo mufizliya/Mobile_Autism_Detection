@@ -33,6 +33,7 @@ class SessionFileNames {
       'paper_feature_match_report.json';
   static const String paperFeatureCoverage =
       'paper_feature_coverage.json';
+  static const String featureReliability = 'feature_reliability.json';
 
   // Validation/final files
   static const String sessionQuality = 'session_quality.json';

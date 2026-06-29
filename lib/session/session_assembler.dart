@@ -4,6 +4,7 @@ import 'session_file_names.dart';
 import 'session_service.dart';
 import '../phenotype/mappers/paper_phenotype_mapper.dart';
 import '../phenotype/validation/session_quality_validator.dart';
+import '../phenotype/validation/feature_reliability_builder.dart';
 
 class SessionAssembler {
   static Future<Map<String, dynamic>> buildAndSave({
@@ -54,6 +55,8 @@ class SessionAssembler {
         await PaperPhenotypeMapper.buildAndSave(sessionDir: sessionDir);
     final Map<String, dynamic> sessionQuality =
         await SessionQualityValidator.buildAndSave(sessionDir: sessionDir);
+    final Map<String, dynamic> featureReliability =
+        await FeatureReliabilityBuilder.buildAndSave(sessionDir: sessionDir);
 
     final Map<String, dynamic> phenotypeVector = Map<String, dynamic>.from(
       phenotypeOutputs['phenotype_vector'] as Map,
@@ -107,6 +110,7 @@ class SessionAssembler {
       SessionFileNames.phenotypeVector: true,
       SessionFileNames.paperAlignedFeatures: true,
       SessionFileNames.paperFeatureCoverage: true,
+      SessionFileNames.featureReliability: true,
       SessionFileNames.bubbleGameReactions: allFiles.contains(
         SessionFileNames.bubbleGameReactions,
       ),
@@ -134,6 +138,7 @@ class SessionAssembler {
       'generated_at': DateTime.now().toIso8601String(),
       'session_dir': sessionDir.path,
       'session_quality': sessionQuality,
+      'feature_reliability': featureReliability,
       'completed_modules': [
         if (childInfo != null) 'child_info',
         if (scqResults != null) 'scq',
@@ -143,6 +148,7 @@ class SessionAssembler {
         if (gameMetrics != null) 'bubble_game',
         'phenotype_mapping_v1',
         'session_quality_validation',
+        'feature_reliability_report',
         
       ],
       'files': files,
