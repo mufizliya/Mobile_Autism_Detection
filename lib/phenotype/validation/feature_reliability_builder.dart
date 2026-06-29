@@ -10,30 +10,28 @@ class FeatureReliabilityBuilder {
   }) async {
     final Map<String, dynamic>? paperAlignedFeatures =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.paperAlignedFeatures,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.paperAlignedFeatures,
+        );
 
     final Map<String, dynamic>? gameMetrics =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.gameMetrics,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.gameMetrics,
+        );
 
-    final Map<String, dynamic> values =
-        paperAlignedFeatures?['values'] is Map
-            ? Map<String, dynamic>.from(paperAlignedFeatures!['values'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> values = paperAlignedFeatures?['values'] is Map
+        ? Map<String, dynamic>.from(paperAlignedFeatures!['values'] as Map)
+        : <String, dynamic>{};
 
-    final Map<String, dynamic> sources =
-        paperAlignedFeatures?['sources'] is Map
-            ? Map<String, dynamic>.from(paperAlignedFeatures!['sources'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> sources = paperAlignedFeatures?['sources'] is Map
+        ? Map<String, dynamic>.from(paperAlignedFeatures!['sources'] as Map)
+        : <String, dynamic>{};
 
     final Map<String, dynamic> touchFeatures =
         gameMetrics?['touch_features'] is Map
-            ? Map<String, dynamic>.from(gameMetrics!['touch_features'] as Map)
-            : <String, dynamic>{};
+        ? Map<String, dynamic>.from(gameMetrics!['touch_features'] as Map)
+        : <String, dynamic>{};
 
     final bool touchForceAvailable =
         touchFeatures['touch_force_available'] == true;
@@ -140,16 +138,16 @@ class FeatureReliabilityBuilder {
           'source': source,
           'confidence': 'high',
           'reason':
-              'True gaze-to-AOI is not implemented. A head-pose proxy could not generate enough valid clustered points for this session.',
+              'Calibrated iris gaze could not generate enough valid gaze-to-AOI frames for this session.',
         };
       }
 
       return {
         'status': 'computed_proxy',
         'source': source,
-        'confidence': 'low',
+        'confidence': 'medium',
         'reason':
-            'Computed using head-pose-estimated gaze AOI proxy, not true eye tracking.',
+            'Computed using calibrated MediaPipe iris landmarks mapped to screen AOIs. This is closer to gaze estimation than head-pose proxy, but not clinical eye-tracking hardware.',
       };
     }
 
@@ -224,8 +222,7 @@ class FeatureReliabilityBuilder {
           'status': 'missing_data_quality',
           'source': source,
           'confidence': 'medium',
-          'reason':
-              'Bubble game/touch data was insufficient for this session.',
+          'reason': 'Bubble game/touch data was insufficient for this session.',
         };
       }
 
@@ -243,8 +240,7 @@ class FeatureReliabilityBuilder {
         'status': 'missing_data_quality',
         'source': source,
         'confidence': 'medium',
-        'reason':
-            'Feature value is null for this session.',
+        'reason': 'Feature value is null for this session.',
       };
     }
 
@@ -252,22 +248,16 @@ class FeatureReliabilityBuilder {
       'status': 'computed_proxy',
       'source': source,
       'confidence': 'medium',
-      'reason':
-          'Computed from mobile face/head/eye proxy signals.',
+      'reason': 'Computed from mobile face/head/eye proxy signals.',
     };
   }
 
-  static String _overallReliability(
-    Map<String, int> counts,
-  ) {
-    final int algorithmMissing =
-        counts['missing_algorithm_limitation'] ?? 0;
+  static String _overallReliability(Map<String, int> counts) {
+    final int algorithmMissing = counts['missing_algorithm_limitation'] ?? 0;
 
-    final int deviceMissing =
-        counts['missing_device_limitation'] ?? 0;
+    final int deviceMissing = counts['missing_device_limitation'] ?? 0;
 
-    final int dataMissing =
-        counts['missing_data_quality'] ?? 0;
+    final int dataMissing = counts['missing_data_quality'] ?? 0;
 
     final int lowQualityMissing =
         algorithmMissing + deviceMissing + dataMissing;
@@ -295,7 +285,7 @@ class FeatureReliabilityBuilder {
           PaperFeatureNames.gazeSilhouetteScore,
         ],
         'recommendation':
-            'Replace head-pose gaze proxy with calibrated eye-gaze estimation mapped to social/nonsocial AOIs.',
+            'Improve calibrated iris gaze by validating against known screen targets and adding stronger calibration/modeling.',
       },
       {
         'priority': 2,
@@ -310,9 +300,7 @@ class FeatureReliabilityBuilder {
       improvements.add({
         'priority': 3,
         'area': 'touch_force_device_support',
-        'features': [
-          PaperFeatureNames.popTheBubblesAverageAppliedForce,
-        ],
+        'features': [PaperFeatureNames.popTheBubblesAverageAppliedForce],
         'recommendation':
             'Use a device with variable pressure support or calibrate pressure/radius proxy across supported Android devices.',
       });

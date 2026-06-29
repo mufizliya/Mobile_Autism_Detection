@@ -8,9 +8,8 @@ import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import 'stimulus_protocol_service.dart';
 import '../../native/native_face_recorder_service.dart';
-import '../../native/native_iris_recorder_service.dart';
-import 'calibrated_gaze_builder.dart';
-
+//import '../../native/native_iris_recorder_service.dart';
+//import 'calibrated_gaze_builder.dart';
 import '../bubble_game/bubble_game_screen.dart';
 
 class VideoProtocolScreen extends StatefulWidget {
@@ -196,11 +195,11 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     alreadyLoggedNameCallIds.clear();
 
     await NativeFaceRecorderService.start();
-    try {
-      await NativeIrisRecorderService.start();
-    } catch (error) {
-      debugPrint('Iris recorder start failed: $error');
-    }
+    // try {
+    //   await NativeIrisRecorderService.start();
+    // } catch (error) {
+    //   debugPrint('Iris recorder start failed: $error');
+    // }
     await currentController.seekTo(Duration.zero);
     await currentController.play();
 
@@ -386,18 +385,18 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     } catch (error) {
       framewisePayload = {'error': error.toString()};
     }
-    Map<String, dynamic>? irisPayload;
+    // Map<String, dynamic>? irisPayload;
 
-    try {
-      irisPayload = await NativeIrisRecorderService.stopAndSave(
-        sessionDir: widget.sessionDir,
-        fileName: SessionFileNames.videoIrisSignals,
-      );
-    } catch (error) {
-      debugPrint('Iris recorder stop/save failed: $error');
-    }
-    final Map<String, dynamic> calibratedGazePayload =
-        await CalibratedGazeBuilder.buildAndSave(sessionDir: widget.sessionDir);
+    // try {
+    //   irisPayload = await NativeIrisRecorderService.stopAndSave(
+    //     sessionDir: widget.sessionDir,
+    //     fileName: SessionFileNames.videoIrisSignals,
+    //   );
+    // } catch (error) {
+    //   debugPrint('Iris recorder stop/save failed: $error');
+    // }
+    // final Map<String, dynamic> calibratedGazePayload =
+    //     await CalibratedGazeBuilder.buildAndSave(sessionDir: widget.sessionDir);
 
     Map<String, dynamic>? framewiseExportSummary;
 
@@ -424,7 +423,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
       'framewise_face_signals_summary': framewisePayload['summary'],
       'framewise_csv_export': framewiseExportSummary,
-      'Calibrated gaze frames: ${calibratedGazePayload['valid_gaze_frame_count']}'
+      //'Calibrated gaze frames: ${calibratedGazePayload['valid_gaze_frame_count']}'
       'actual_name_call_trigger_logging': {
         'enabled': true,
         'method': 'flutter_video_player_position_timer',
@@ -437,8 +436,8 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       'iris_landmark_recording': {
         'enabled': true,
         'file': SessionFileNames.videoIrisSignals,
-        'frame_count': irisPayload?['frame_count'],
-        'summary': irisPayload?['summary'],
+        // 'frame_count': irisPayload?['frame_count'],
+        // 'summary': irisPayload?['summary'],
         'source': 'mediapipe_face_landmarker_iris',
       },
       'status': 'completed',

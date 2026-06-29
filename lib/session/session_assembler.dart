@@ -45,7 +45,29 @@ class SessionAssembler {
           sessionDir: sessionDir,
           fileName: SessionFileNames.framewiseFaceSignals,
         );
+    final Map<String, dynamic>? gazeCalibration =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.gazeCalibration,
+        );
 
+    final Map<String, dynamic>? gazeCalibrationQuality =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.gazeCalibrationQuality,
+        );
+
+    final Map<String, dynamic>? videoIrisSignals =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.videoIrisSignals,
+        );
+
+    final Map<String, dynamic>? calibratedGazeFrames =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.calibratedGazeFrames,
+        );
     final Map<String, dynamic>? gameMetrics =
         await SessionService.readJsonIfExists(
           sessionDir: sessionDir,
@@ -106,6 +128,13 @@ class SessionAssembler {
         SessionFileNames.parentNameCallCues,
       ),
       SessionFileNames.framewiseFaceSignals: framewiseFaceSignals != null,
+      SessionFileNames.gazeCalibration: gazeCalibration != null,
+      SessionFileNames.gazeCalibrationQuality: gazeCalibrationQuality != null,
+      SessionFileNames.gazeCalibrationRawIris: allFiles.contains(
+        SessionFileNames.gazeCalibrationRawIris,
+      ),
+      SessionFileNames.videoIrisSignals: videoIrisSignals != null,
+      SessionFileNames.calibratedGazeFrames: calibratedGazeFrames != null,
       SessionFileNames.gameMetrics: gameMetrics != null,
       SessionFileNames.phenotypeVector: true,
       SessionFileNames.paperAlignedFeatures: true,
@@ -139,6 +168,15 @@ class SessionAssembler {
       'session_dir': sessionDir.path,
       'session_quality': sessionQuality,
       'feature_reliability': featureReliability,
+      'gaze_calibration_quality': gazeCalibrationQuality,
+      'video_iris_signals_summary': videoIrisSignals?['summary'],
+      'calibrated_gaze_summary': {
+        'status': calibratedGazeFrames?['status'],
+        'frame_count': calibratedGazeFrames?['frame_count'],
+        'valid_gaze_frame_count':
+            calibratedGazeFrames?['valid_gaze_frame_count'],
+        'valid_gaze_ratio': calibratedGazeFrames?['valid_gaze_ratio'],
+      },
       'completed_modules': [
         if (childInfo != null) 'child_info',
         if (scqResults != null) 'scq',
@@ -148,8 +186,9 @@ class SessionAssembler {
         if (gameMetrics != null) 'bubble_game',
         'phenotype_mapping_v1',
         'session_quality_validation',
+        if (gazeCalibration != null) 'gaze_calibration',
+        if (calibratedGazeFrames != null) 'calibrated_iris_gaze',
         'feature_reliability_report',
-        
       ],
       'files': files,
       'manifest_file': SessionFileNames.sessionManifest,

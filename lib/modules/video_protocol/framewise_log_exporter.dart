@@ -20,6 +20,8 @@ class FramewiseLogExporter {
     'blink_state',
     'gaze_x',
     'gaze_y',
+    'gaze_valid',
+    'gaze_source',
     'yaw_proxy',
     'pitch_proxy',
     'roll_proxy_deg',
@@ -39,6 +41,11 @@ class FramewiseLogExporter {
     final List<Map<String, dynamic>> frames = _listMap(
       framewiseSignals['frames'],
     );
+    final Map<String, dynamic>? calibratedGazePayload =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.calibratedGazeFrames,
+        );
 
     final List<Map<String, dynamic>> exportedStimuli = [];
 
@@ -85,6 +92,7 @@ class FramewiseLogExporter {
         stimulusId: stimulusId,
         stimulusType: stimulusType,
         paperCategory: paperCategory,
+        calibratedGazePayload: calibratedGazePayload,
       );
 
       final String csvFileName = SessionFileNames.framewiseLogCsv(stimulusId);
@@ -140,8 +148,11 @@ class FramewiseLogExporter {
     required String stimulusId,
     required String stimulusType,
     required String paperCategory,
+    required Map<String, dynamic>? calibratedGazePayload,
   }) {
     final List<List<dynamic>> rows = [];
+    final Map<int, Map<String, dynamic>> calibratedGazeByFrameIndex =
+        _calibratedGazeByFrameIndex(calibratedGazePayload);
 
     double? previousCenterX;
     double? previousCenterY;
@@ -215,6 +226,15 @@ class FramewiseLogExporter {
           _nullableNumber(frame['mouth_open_signal']) ?? smiling;
 
       final double? eyebrowSignal = _nullableNumber(frame['eyebrow_signal']);
+      final int frameIndex = _intNumber(frame['frame_index']);
+
+      final Map<String, dynamic>? gazeFrame =
+          calibratedGazeByFrameIndex[frameIndex];
+
+      final double? calibratedGazeX = _nullableNumber(gazeFrame?['gaze_x']);
+      final double? calibratedGazeY = _nullableNumber(gazeFrame?['gaze_y']);
+
+      final bool calibratedGazeValid = gazeFrame?['gaze_valid'] == true;
 
       rows.add([
         frame['timestamp_ms'],
@@ -229,8 +249,10 @@ class FramewiseLogExporter {
         _roundNullable(avgEye),
         eyeOpen,
         blinkState,
-        _roundNullable(centerX),
-        _roundNullable(centerY),
+        _roundNullable(calibratedGazeX),
+        _roundNullable(calibratedGazeY),
+        calibratedGazeValid,
+        calibratedGazeValid ? 'mobile_iris_landmark_calibrated_gaze' : '',
         _roundNullable(_nullableNumber(frame['head_yaw'])),
         _roundNullable(_nullableNumber(frame['head_pitch'])),
         _roundNullable(_nullableNumber(frame['head_roll'])),
@@ -463,4 +485,38 @@ class FramewiseLogExporter {
 
     return _round4(value);
   }
+  static Map<int, Map<String, dynamic>> _calibratedGazeByFrameIndex(
+  Map<String, dynamic>? payload,
+) {
+  final Map<int, Map<String, dynamic>> result = {};
+
+  if (payload == null || payload['frames'] is! List) {
+    return result;
+  }
+
+  final List<dynamic> frames = payload['frames'] as List<dynamic>;
+
+  for (final dynamic rawFrame in frames) {
+    if (rawFrame is! Map) continue;
+
+    final Map<String, dynamic> frame =
+        Map<String, dynamic>.from(rawFrame);
+
+    final int frameIndex = _intNumber(frame['frame_index']);
+
+    result[frameIndex] = frame;
+  }
+
+  return result;
+}
+
+static int _intNumber(dynamic value) {
+  if (value is int) return value;
+
+  if (value is num) return value.toInt();
+
+  if (value is String) return int.tryParse(value) ?? 0;
+
+  return 0;
+}
 }

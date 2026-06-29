@@ -157,9 +157,9 @@ class PaperPhenotypeMapper {
         stimulusById: stimulusById,
         stimulusIds: mixedStimuli,
       ),
-      source: 'mobile_head_pose_gaze_aoi_proxy',
+      source: 'mobile_iris_landmark_calibrated_gaze_aoi',
       note:
-          'Proxy for paper gaze percent social. Uses head yaw/pitch to estimate a normalized screen gaze point, then classifies it against social and nonsocial AOIs. This is not true eye tracking.',
+          'Computed using calibrated MediaPipe iris landmarks mapped to normalized screen coordinates, then classified against social/nonsocial AOIs.',
     );
 
     setFeature(
@@ -169,9 +169,9 @@ class PaperPhenotypeMapper {
         stimulusById: stimulusById,
         stimulusIds: mixedStimuli,
       ),
-      source: 'mobile_head_pose_gaze_aoi_proxy',
+      source: 'mobile_iris_landmark_calibrated_gaze_aoi',
       note:
-          'Proxy for paper gaze silhouette score. Uses head-pose-estimated gaze points and social/nonsocial AOI assignment. This approximates AOI separation but is not the original paper eye-tracking method.',
+          'Computed from calibrated MediaPipe iris landmark gaze coordinates and social/nonsocial AOI assignment.',
     );
 
     setFeature(
@@ -783,7 +783,7 @@ class PaperPhenotypeMapper {
           PaperFeatureNames.attentionToSpeech,
         ],
         'improvement':
-            'Current implementation uses a head-pose AOI proxy. For paper-faithful gaze features, add true gaze estimation or eye landmark calibration and map gaze to stimulus AOIs.',
+            'Current implementation uses calibrated MediaPipe iris landmarks mapped to stimulus AOIs. For stronger paper-faithfulness, validate gaze accuracy against known screen targets and improve calibration/modeling.',
       },
       {
         'area': 'eyebrow_and_mouth_complexity',
@@ -1080,19 +1080,16 @@ class PaperPhenotypeMapper {
     required Map<String, dynamic> socialAoi,
     required Map<String, dynamic> nonsocialAoi,
   }) {
-    if (row['face_detected'] != 'true') {
+    if (row['gaze_valid'] != 'true') {
       return null;
     }
 
-    final double? yaw = _toNullableDouble(row['yaw_proxy']);
-    final double? pitch = _toNullableDouble(row['pitch_proxy']);
+    final double? gazeX = _toNullableDouble(row['gaze_x']);
+    final double? gazeY = _toNullableDouble(row['gaze_y']);
 
-    if (yaw == null || pitch == null) {
+    if (gazeX == null || gazeY == null) {
       return null;
     }
-
-    final double gazeX = _clamp01(0.5 - (yaw / 60.0));
-    final double gazeY = _clamp01(0.5 + (pitch / 60.0));
 
     String label;
 
@@ -1171,18 +1168,6 @@ class PaperPhenotypeMapper {
     final double dy = y1 - y2;
 
     return sqrt((dx * dx) + (dy * dy));
-  }
-
-  static double _clamp01(double value) {
-    if (value < 0.0) {
-      return 0.0;
-    }
-
-    if (value > 1.0) {
-      return 1.0;
-    }
-
-    return value;
   }
 }
 

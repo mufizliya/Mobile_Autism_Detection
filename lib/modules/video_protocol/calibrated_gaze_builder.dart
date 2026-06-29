@@ -31,7 +31,7 @@ class CalibratedGazeBuilder {
 
       await SessionService.saveJson(
         sessionDir: sessionDir,
-        fileName: 'calibrated_gaze_frames.json',
+        fileName: SessionFileNames.calibratedGazeFrames,
         data: emptyPayload,
       );
 
@@ -138,7 +138,7 @@ class CalibratedGazeBuilder {
 
     await SessionService.saveJson(
       sessionDir: sessionDir,
-      fileName: 'calibrated_gaze_frames.json',
+      fileName: SessionFileNames.calibratedGazeFrames,
       data: payload,
     );
 
