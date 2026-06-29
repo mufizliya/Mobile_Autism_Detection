@@ -71,6 +71,15 @@ class PaperPhenotypeMapper {
           fileName: SessionFileNames.stimulusEvents,
         );
 
+    final Map<String, dynamic>? videoTest =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.videoTest,
+        );
+
+    final Map<String, Map<String, dynamic>> stimulusById =
+        _stimulusByIdFromVideoTest(videoTest);
+
     final Map<String, dynamic> featureSources = {};
     final Map<String, dynamic> featureNotes = {};
     final Map<String, dynamic> paperFeatures = {};
@@ -143,18 +152,26 @@ class PaperPhenotypeMapper {
 
     setFeature(
       name: PaperFeatureNames.gazePercentSocial,
-      value: null,
-      source: 'missing_true_gaze_to_screen_aoi',
+      value: _computeGazePercentSocialProxy(
+        csvRowsByStimulus: csvRowsByStimulus,
+        stimulusById: stimulusById,
+        stimulusIds: mixedStimuli,
+      ),
+      source: 'mobile_head_pose_gaze_aoi_proxy',
       note:
-          'Paper feature requires gaze coordinates mapped to social/nonsocial AOIs on the stimulus screen. Current ML Kit recorder gives face/head proxy signals, not true screen gaze.',
+          'Proxy for paper gaze percent social. Uses head yaw/pitch to estimate a normalized screen gaze point, then classifies it against social and nonsocial AOIs. This is not true eye tracking.',
     );
 
     setFeature(
       name: PaperFeatureNames.gazeSilhouetteScore,
-      value: null,
-      source: 'missing_true_gaze_to_screen_aoi',
+      value: _computeGazeSilhouetteProxy(
+        csvRowsByStimulus: csvRowsByStimulus,
+        stimulusById: stimulusById,
+        stimulusIds: mixedStimuli,
+      ),
+      source: 'mobile_head_pose_gaze_aoi_proxy',
       note:
-          'Paper feature requires true gaze clustering/separation between social and nonsocial AOIs. Current data cannot compute it faithfully.',
+          'Proxy for paper gaze silhouette score. Uses head-pose-estimated gaze points and social/nonsocial AOI assignment. This approximates AOI separation but is not the original paper eye-tracking method.',
     );
 
     setFeature(
@@ -766,7 +783,7 @@ class PaperPhenotypeMapper {
           PaperFeatureNames.attentionToSpeech,
         ],
         'improvement':
-            'Add gaze estimation or eye landmark pipeline and map gaze to stimulus AOIs.',
+            'Current implementation uses a head-pose AOI proxy. For paper-faithful gaze features, add true gaze estimation or eye landmark calibration and map gaze to stimulus AOIs.',
       },
       {
         'area': 'eyebrow_and_mouth_complexity',
@@ -859,4 +876,320 @@ class PaperPhenotypeMapper {
   static double _round4(double value) {
     return double.parse(value.toStringAsFixed(4));
   }
+
+  static Map<String, Map<String, dynamic>> _stimulusByIdFromVideoTest(
+    Map<String, dynamic>? videoTest,
+  ) {
+    final Map<String, Map<String, dynamic>> result = {};
+
+    final dynamic rawResults = videoTest == null
+        ? null
+        : videoTest['stimulus_results'];
+
+    if (rawResults is! List) {
+      return result;
+    }
+
+    for (final dynamic rawItem in rawResults) {
+      if (rawItem is! Map) {
+        continue;
+      }
+
+      final Map<String, dynamic> item = Map<String, dynamic>.from(rawItem);
+
+      if (item['stimulus'] is! Map) {
+        continue;
+      }
+
+      final Map<String, dynamic> stimulus = Map<String, dynamic>.from(
+        item['stimulus'] as Map,
+      );
+
+      final String stimulusId = stimulus['id']?.toString() ?? '';
+
+      if (stimulusId.isEmpty) {
+        continue;
+      }
+
+      result[stimulusId] = stimulus;
+    }
+
+    return result;
+  }
+
+  static double? _computeGazePercentSocialProxy({
+    required Map<String, List<Map<String, String>>> csvRowsByStimulus,
+    required Map<String, Map<String, dynamic>> stimulusById,
+    required List<String> stimulusIds,
+  }) {
+    int socialCount = 0;
+    int totalCount = 0;
+
+    for (final String stimulusId in stimulusIds) {
+      final Map<String, dynamic>? stimulus = stimulusById[stimulusId];
+
+      if (stimulus == null) {
+        continue;
+      }
+
+      final Map<String, dynamic>? socialAoi = _aoiMap(stimulus['social_aoi']);
+      final Map<String, dynamic>? nonsocialAoi = _aoiMap(
+        stimulus['nonsocial_aoi'],
+      );
+
+      if (socialAoi == null || nonsocialAoi == null) {
+        continue;
+      }
+
+      final List<Map<String, String>> rows =
+          csvRowsByStimulus[stimulusId] ?? [];
+
+      for (final Map<String, String> row in rows) {
+        final _GazeProxyPoint? point = _estimateGazeProxyPoint(
+          row: row,
+          socialAoi: socialAoi,
+          nonsocialAoi: nonsocialAoi,
+        );
+
+        if (point == null) {
+          continue;
+        }
+
+        totalCount += 1;
+
+        if (point.label == 'social') {
+          socialCount += 1;
+        }
+      }
+    }
+
+    if (totalCount == 0) {
+      return null;
+    }
+
+    return _round4(socialCount / totalCount);
+  }
+
+  static double? _computeGazeSilhouetteProxy({
+    required Map<String, List<Map<String, String>>> csvRowsByStimulus,
+    required Map<String, Map<String, dynamic>> stimulusById,
+    required List<String> stimulusIds,
+  }) {
+    final List<_GazeProxyPoint> points = [];
+
+    for (final String stimulusId in stimulusIds) {
+      final Map<String, dynamic>? stimulus = stimulusById[stimulusId];
+
+      if (stimulus == null) {
+        continue;
+      }
+
+      final Map<String, dynamic>? socialAoi = _aoiMap(stimulus['social_aoi']);
+      final Map<String, dynamic>? nonsocialAoi = _aoiMap(
+        stimulus['nonsocial_aoi'],
+      );
+
+      if (socialAoi == null || nonsocialAoi == null) {
+        continue;
+      }
+
+      final List<Map<String, String>> rows =
+          csvRowsByStimulus[stimulusId] ?? [];
+
+      for (final Map<String, String> row in rows) {
+        final _GazeProxyPoint? point = _estimateGazeProxyPoint(
+          row: row,
+          socialAoi: socialAoi,
+          nonsocialAoi: nonsocialAoi,
+        );
+
+        if (point != null) {
+          points.add(point);
+        }
+      }
+    }
+
+    final int socialCount = points
+        .where((_GazeProxyPoint point) => point.label == 'social')
+        .length;
+
+    final int nonsocialCount = points
+        .where((_GazeProxyPoint point) => point.label == 'nonsocial')
+        .length;
+
+    if (socialCount < 2 || nonsocialCount < 2) {
+      return null;
+    }
+
+    final List<double> silhouettes = [];
+
+    for (int i = 0; i < points.length; i++) {
+      final _GazeProxyPoint current = points[i];
+
+      final List<_GazeProxyPoint> sameCluster = points
+          .where(
+            (_GazeProxyPoint point) =>
+                point.label == current.label && point != current,
+          )
+          .toList();
+
+      final List<_GazeProxyPoint> otherCluster = points
+          .where((_GazeProxyPoint point) => point.label != current.label)
+          .toList();
+
+      if (sameCluster.isEmpty || otherCluster.isEmpty) {
+        continue;
+      }
+
+      final double a = _mean(
+        sameCluster
+            .map(
+              (_GazeProxyPoint point) =>
+                  _distance2d(current.x, current.y, point.x, point.y),
+            )
+            .toList(),
+      );
+
+      final double b = _mean(
+        otherCluster
+            .map(
+              (_GazeProxyPoint point) =>
+                  _distance2d(current.x, current.y, point.x, point.y),
+            )
+            .toList(),
+      );
+
+      final double denominator = max(a, b);
+
+      if (denominator <= 0) {
+        continue;
+      }
+
+      silhouettes.add((b - a) / denominator);
+    }
+
+    if (silhouettes.isEmpty) {
+      return null;
+    }
+
+    return _round4(_mean(silhouettes));
+  }
+
+  static _GazeProxyPoint? _estimateGazeProxyPoint({
+    required Map<String, String> row,
+    required Map<String, dynamic> socialAoi,
+    required Map<String, dynamic> nonsocialAoi,
+  }) {
+    if (row['face_detected'] != 'true') {
+      return null;
+    }
+
+    final double? yaw = _toNullableDouble(row['yaw_proxy']);
+    final double? pitch = _toNullableDouble(row['pitch_proxy']);
+
+    if (yaw == null || pitch == null) {
+      return null;
+    }
+
+    final double gazeX = _clamp01(0.5 - (yaw / 60.0));
+    final double gazeY = _clamp01(0.5 + (pitch / 60.0));
+
+    String label;
+
+    final bool insideSocial = _pointInsideAoi(
+      x: gazeX,
+      y: gazeY,
+      aoi: socialAoi,
+    );
+
+    final bool insideNonsocial = _pointInsideAoi(
+      x: gazeX,
+      y: gazeY,
+      aoi: nonsocialAoi,
+    );
+
+    if (insideSocial && !insideNonsocial) {
+      label = 'social';
+    } else if (insideNonsocial && !insideSocial) {
+      label = 'nonsocial';
+    } else {
+      final List<double> socialCenter = _aoiCenter(socialAoi);
+      final List<double> nonsocialCenter = _aoiCenter(nonsocialAoi);
+
+      final double socialDistance = _distance2d(
+        gazeX,
+        gazeY,
+        socialCenter[0],
+        socialCenter[1],
+      );
+
+      final double nonsocialDistance = _distance2d(
+        gazeX,
+        gazeY,
+        nonsocialCenter[0],
+        nonsocialCenter[1],
+      );
+
+      label = socialDistance <= nonsocialDistance ? 'social' : 'nonsocial';
+    }
+
+    return _GazeProxyPoint(x: gazeX, y: gazeY, label: label);
+  }
+
+  static Map<String, dynamic>? _aoiMap(dynamic value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(value);
+  }
+
+  static bool _pointInsideAoi({
+    required double x,
+    required double y,
+    required Map<String, dynamic> aoi,
+  }) {
+    final double xMin = _toDouble(aoi['x_min']);
+    final double yMin = _toDouble(aoi['y_min']);
+    final double xMax = _toDouble(aoi['x_max']);
+    final double yMax = _toDouble(aoi['y_max']);
+
+    return x >= xMin && x <= xMax && y >= yMin && y <= yMax;
+  }
+
+  static List<double> _aoiCenter(Map<String, dynamic> aoi) {
+    final double xMin = _toDouble(aoi['x_min']);
+    final double yMin = _toDouble(aoi['y_min']);
+    final double xMax = _toDouble(aoi['x_max']);
+    final double yMax = _toDouble(aoi['y_max']);
+
+    return [(xMin + xMax) / 2.0, (yMin + yMax) / 2.0];
+  }
+
+  static double _distance2d(double x1, double y1, double x2, double y2) {
+    final double dx = x1 - x2;
+    final double dy = y1 - y2;
+
+    return sqrt((dx * dx) + (dy * dy));
+  }
+
+  static double _clamp01(double value) {
+    if (value < 0.0) {
+      return 0.0;
+    }
+
+    if (value > 1.0) {
+      return 1.0;
+    }
+
+    return value;
+  }
+}
+
+class _GazeProxyPoint {
+  _GazeProxyPoint({required this.x, required this.y, required this.label});
+
+  final double x;
+  final double y;
+  final String label;
 }
