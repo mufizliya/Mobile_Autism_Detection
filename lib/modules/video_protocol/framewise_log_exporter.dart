@@ -485,38 +485,38 @@ class FramewiseLogExporter {
 
     return _round4(value);
   }
-  static Map<int, Map<String, dynamic>> _calibratedGazeByFrameIndex(
-  Map<String, dynamic>? payload,
-) {
-  final Map<int, Map<String, dynamic>> result = {};
 
-  if (payload == null || payload['frames'] is! List) {
+  static Map<int, Map<String, dynamic>> _calibratedGazeByFrameIndex(
+    Map<String, dynamic>? payload,
+  ) {
+    final Map<int, Map<String, dynamic>> result = {};
+
+    if (payload == null || payload['frames'] is! List) {
+      return result;
+    }
+
+    final List<dynamic> frames = payload['frames'] as List<dynamic>;
+
+    for (final dynamic rawFrame in frames) {
+      if (rawFrame is! Map) continue;
+
+      final Map<String, dynamic> frame = Map<String, dynamic>.from(rawFrame);
+
+      final int frameIndex = _intNumber(frame['frame_index']);
+
+      result[frameIndex] = frame;
+    }
+
     return result;
   }
 
-  final List<dynamic> frames = payload['frames'] as List<dynamic>;
+  static int _intNumber(dynamic value) {
+    if (value is int) return value;
 
-  for (final dynamic rawFrame in frames) {
-    if (rawFrame is! Map) continue;
+    if (value is num) return value.toInt();
 
-    final Map<String, dynamic> frame =
-        Map<String, dynamic>.from(rawFrame);
+    if (value is String) return int.tryParse(value) ?? 0;
 
-    final int frameIndex = _intNumber(frame['frame_index']);
-
-    result[frameIndex] = frame;
+    return 0;
   }
-
-  return result;
-}
-
-static int _intNumber(dynamic value) {
-  if (value is int) return value;
-
-  if (value is num) return value.toInt();
-
-  if (value is String) return int.tryParse(value) ?? 0;
-
-  return 0;
-}
 }

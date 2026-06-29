@@ -14,18 +14,19 @@ class CalibratedGazeBuilder {
       fileName: SessionFileNames.gazeCalibration,
     );
 
-    final Map<String, dynamic>? irisSignals =
+    final Map<String, dynamic>? framewiseSignals =
         await SessionService.readJsonIfExists(
       sessionDir: sessionDir,
-      fileName: SessionFileNames.videoIrisSignals,
+      fileName: SessionFileNames.framewiseFaceSignals,
     );
 
-    if (calibration == null || irisSignals == null) {
+    if (calibration == null || framewiseSignals == null) {
       final Map<String, dynamic> emptyPayload = {
-        'schema_version': 'mobile_calibrated_iris_gaze_v1',
+        'schema_version': 'mobile_calibrated_iris_gaze_v2',
         'generated_at': DateTime.now().toIso8601String(),
         'status': 'missing_inputs',
-        'reason': 'Missing gaze calibration or video iris signal file.',
+        'reason':
+            'Missing gaze calibration or unified framewise face signal file.',
         'frames': [],
       };
 
@@ -65,30 +66,36 @@ class CalibratedGazeBuilder {
     final double? ySlope = nullableNumber(gazeYMapping['slope']);
 
     final List<Map<String, dynamic>> rawFrames = listMap(
-      irisSignals['frames'],
+      framewiseSignals['frames'],
     );
 
     final List<Map<String, dynamic>> calibratedFrames = [];
 
     int validGazeCount = 0;
+    int irisFrameCount = 0;
 
     for (final Map<String, dynamic> frame in rawFrames) {
-      final Map<String, dynamic>? iris = mapOrNull(frame['iris_signals']);
+      final bool hasIris = frame['has_iris_landmarks'] == true;
+
+      if (hasIris) {
+        irisFrameCount += 1;
+      }
 
       final double? xInput = extractInput(
         inputName: gazeXInput,
-        iris: iris,
+        frame: frame,
       );
 
       final double? yInput = extractInput(
         inputName: gazeYInput,
-        iris: iris,
+        frame: frame,
       );
 
       double? gazeX;
       double? gazeY;
 
-      if (xInput != null &&
+      if (hasIris &&
+          xInput != null &&
           yInput != null &&
           xIntercept != null &&
           xSlope != null &&
@@ -104,7 +111,7 @@ class CalibratedGazeBuilder {
         'time_ms': frame['time_ms'],
         'timestamp_ms': frame['timestamp_ms'],
         'face_detected': frame['face_detected'],
-        'has_iris_landmarks': iris?['has_iris_landmarks'] == true,
+        'has_iris_landmarks': hasIris,
         'gaze_x': gazeX == null ? null : round4(gazeX),
         'gaze_y': gazeY == null ? null : round4(gazeY),
         'gaze_valid': gazeX != null && gazeY != null,
@@ -112,7 +119,7 @@ class CalibratedGazeBuilder {
         'gaze_y_input_name': gazeYInput,
         'gaze_x_input_value': xInput == null ? null : round4(xInput),
         'gaze_y_input_value': yInput == null ? null : round4(yInput),
-        'source': 'mobile_iris_landmark_calibrated_gaze',
+        'source': 'mobile_unified_recorder_iris_calibrated_gaze',
       });
     }
 
@@ -120,14 +127,20 @@ class CalibratedGazeBuilder {
         ? 0.0
         : validGazeCount / calibratedFrames.length;
 
+    final double irisRatio = calibratedFrames.isEmpty
+        ? 0.0
+        : irisFrameCount / calibratedFrames.length;
+
     final Map<String, dynamic> payload = {
-      'schema_version': 'mobile_calibrated_iris_gaze_v1',
+      'schema_version': 'mobile_calibrated_iris_gaze_v2',
       'generated_at': DateTime.now().toIso8601String(),
       'status': validGazeCount > 0 ? 'computed' : 'no_valid_gaze_frames',
       'calibration_file': SessionFileNames.gazeCalibration,
-      'video_iris_file': SessionFileNames.videoIrisSignals,
+      'framewise_input_file': SessionFileNames.framewiseFaceSignals,
       'frame_count': calibratedFrames.length,
+      'iris_frame_count': irisFrameCount,
       'valid_gaze_frame_count': validGazeCount,
+      'iris_frame_ratio': round4(irisRatio),
       'valid_gaze_ratio': round4(validRatio),
       'mapping': {
         'gaze_x': gazeXMapping,
@@ -147,18 +160,16 @@ class CalibratedGazeBuilder {
 
   static double? extractInput({
     required String inputName,
-    required Map<String, dynamic>? iris,
+    required Map<String, dynamic> frame,
   }) {
-    if (iris == null) return null;
-
     if (inputName == 'mean_average_iris_in_eye_x' ||
         inputName == 'average_iris_in_eye_x') {
-      return nullableNumber(iris['average_iris_in_eye_x']);
+      return nullableNumber(frame['average_iris_in_eye_x']);
     }
 
     if (inputName == 'mean_iris_center_x') {
-      final double? leftX = nullableNumber(iris['left_iris_center_x']);
-      final double? rightX = nullableNumber(iris['right_iris_center_x']);
+      final double? leftX = nullableNumber(frame['left_iris_center_x']);
+      final double? rightX = nullableNumber(frame['right_iris_center_x']);
 
       if (leftX == null || rightX == null) return null;
 
@@ -166,15 +177,15 @@ class CalibratedGazeBuilder {
     }
 
     if (inputName == 'mean_iris_center_y') {
-      final double? leftY = nullableNumber(iris['left_iris_center_y']);
-      final double? rightY = nullableNumber(iris['right_iris_center_y']);
+      final double? leftY = nullableNumber(frame['left_iris_center_y']);
+      final double? rightY = nullableNumber(frame['right_iris_center_y']);
 
       if (leftY == null || rightY == null) return null;
 
       return (leftY + rightY) / 2.0;
     }
 
-    return nullableNumber(iris[inputName]);
+    return nullableNumber(frame[inputName]);
   }
 
   static List<Map<String, dynamic>> listMap(dynamic value) {
@@ -184,14 +195,6 @@ class CalibratedGazeBuilder {
         .whereType<Map>()
         .map((Map item) => Map<String, dynamic>.from(item))
         .toList();
-  }
-
-  static Map<String, dynamic>? mapOrNull(dynamic value) {
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
-
-    return null;
   }
 
   static double? nullableNumber(dynamic value) {

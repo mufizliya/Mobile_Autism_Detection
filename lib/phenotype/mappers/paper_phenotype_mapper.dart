@@ -157,9 +157,9 @@ class PaperPhenotypeMapper {
         stimulusById: stimulusById,
         stimulusIds: mixedStimuli,
       ),
-      source: 'mobile_iris_landmark_calibrated_gaze_aoi',
+      source: 'mobile_unified_recorder_iris_calibrated_gaze_aoi',
       note:
-          'Computed using calibrated MediaPipe iris landmarks mapped to normalized screen coordinates, then classified against social/nonsocial AOIs.',
+          'Computed using calibrated MediaPipe iris landmarks from the unified native recorder, mapped to normalized screen coordinates, then classified against social/nonsocial AOIs.',
     );
 
     setFeature(
@@ -169,9 +169,9 @@ class PaperPhenotypeMapper {
         stimulusById: stimulusById,
         stimulusIds: mixedStimuli,
       ),
-      source: 'mobile_iris_landmark_calibrated_gaze_aoi',
+      source: 'mobile_unified_recorder_iris_calibrated_gaze_aoi',
       note:
-          'Computed from calibrated MediaPipe iris landmark gaze coordinates and social/nonsocial AOI assignment.',
+          'Computed from calibrated MediaPipe iris landmark gaze coordinates from the unified native recorder and social/nonsocial AOI assignment.',
     );
 
     setFeature(

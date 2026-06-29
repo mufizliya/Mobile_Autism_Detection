@@ -9,7 +9,7 @@ import '../../session/session_service.dart';
 import 'stimulus_protocol_service.dart';
 import '../../native/native_face_recorder_service.dart';
 //import '../../native/native_iris_recorder_service.dart';
-//import 'calibrated_gaze_builder.dart';
+import 'calibrated_gaze_builder.dart';
 import '../bubble_game/bubble_game_screen.dart';
 
 class VideoProtocolScreen extends StatefulWidget {
@@ -385,6 +385,8 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     } catch (error) {
       framewisePayload = {'error': error.toString()};
     }
+    final Map<String, dynamic> calibratedGazePayload =
+        await CalibratedGazeBuilder.buildAndSave(sessionDir: widget.sessionDir);
     // Map<String, dynamic>? irisPayload;
 
     // try {
@@ -423,7 +425,7 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
       'framewise_face_signals_summary': framewisePayload['summary'],
       'framewise_csv_export': framewiseExportSummary,
-      //'Calibrated gaze frames: ${calibratedGazePayload['valid_gaze_frame_count']}'
+      'Calibrated gaze frames: ${calibratedGazePayload['valid_gaze_frame_count']}'
       'actual_name_call_trigger_logging': {
         'enabled': true,
         'method': 'flutter_video_player_position_timer',
@@ -433,12 +435,15 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
         'observed_triggered_count': observedTriggeredCount,
         'events_file': SessionFileNames.stimulusEvents,
       },
-      'iris_landmark_recording': {
+      'calibrated_gaze': {
         'enabled': true,
-        'file': SessionFileNames.videoIrisSignals,
-        // 'frame_count': irisPayload?['frame_count'],
-        // 'summary': irisPayload?['summary'],
-        'source': 'mediapipe_face_landmarker_iris',
+        'file': SessionFileNames.calibratedGazeFrames,
+        'status': calibratedGazePayload['status'],
+        'frame_count': calibratedGazePayload['frame_count'],
+        'valid_gaze_frame_count':
+            calibratedGazePayload['valid_gaze_frame_count'],
+        'valid_gaze_ratio': calibratedGazePayload['valid_gaze_ratio'],
+        'source': 'mobile_unified_recorder_iris_calibrated_gaze',
       },
       'status': 'completed',
       'started_at': playbackStartedAt?.toIso8601String(),
