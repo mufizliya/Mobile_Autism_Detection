@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
-import '../video_protocol/video_protocol_screen.dart';
+import '../gaze_calibration/gaze_calibration_screen.dart';
 import 'scq_data.dart';
 
 class ScqScreen extends StatefulWidget {
@@ -119,7 +119,7 @@ class _ScqScreenState extends State<ScqScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (BuildContext context) {
-          return VideoProtocolScreen(
+          return GazeCalibrationScreen(
             sessionDir: widget.sessionDir,
             childInfo: widget.childInfo,
           );

@@ -28,17 +28,21 @@ class NativeIrisRecorderService {
     await _channel.invokeMethod<bool>('start');
   }
 
-  static Future<Map<String, dynamic>> stopAndSave({
-    required Directory sessionDir,
-  }) async {
+  static Future<Map<String, dynamic>> stop() async {
     final dynamic result = await _channel.invokeMethod<dynamic>('stop');
 
-    final Map<String, dynamic> payload =
-        Map<String, dynamic>.from(result as Map);
+    return Map<String, dynamic>.from(result as Map);
+  }
+
+  static Future<Map<String, dynamic>> stopAndSave({
+    required Directory sessionDir,
+    String fileName = outputFileName,
+  }) async {
+    final Map<String, dynamic> payload = await stop();
 
     await SessionService.saveJson(
       sessionDir: sessionDir,
-      fileName: outputFileName,
+      fileName: fileName,
       data: payload,
     );
 
