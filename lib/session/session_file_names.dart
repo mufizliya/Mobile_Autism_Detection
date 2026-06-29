@@ -33,6 +33,8 @@ class SessionFileNames {
   static const String gazeCalibration = 'gaze_calibration.json';
 
   static const String gazeCalibrationQuality = 'gaze_calibration_quality.json';
+  static const String videoIrisSignals =
+    'video_iris_signals.json';
 
   // Validation/final files
   static const String sessionQuality = 'session_quality.json';
