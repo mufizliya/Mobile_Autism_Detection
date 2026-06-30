@@ -194,17 +194,17 @@ class PaperPhenotypeMapper {
     setFeature(
       name: PaperFeatureNames.responseToNameDelaySec,
       value: responseToName['mean_delay_sec'],
-      source: 'mobile_head_pose_angular_response_proxy',
+      source: 'mobile_head_pose_and_calibrated_gaze_response_proxy',
       note:
-          'Close mobile proxy. Estimated from first post-name-call head-pose angular movement response in framewise logs.',
+          'Close mobile proxy. Estimated from actual playback-time name-call cues using post-call head-pose change, head angular velocity, and calibrated gaze shift evidence.'
     );
 
     setFeature(
       name: PaperFeatureNames.responseToNameProportion,
       value: responseToName['response_proportion'],
-      source: 'mobile_head_pose_angular_response_proxy',
+      source: 'mobile_head_pose_and_calibrated_gaze_response_proxy',
       note:
-          'Close mobile proxy. Proportion of name calls with post-call head-pose angular movement response.',
+          'Close mobile proxy. Proportion of name calls with post-call head-pose or calibrated gaze-shift response evidence.'
     );
 
     setFeature(
@@ -212,11 +212,11 @@ class PaperPhenotypeMapper {
       value: _meanSummaryValueByStimuli(
         summariesByStimulus,
         allSocialLikeStimuli,
-        'blink_rate_per_min_proxy',
+        'blink_rate_per_min_event',
       ),
-      source: 'mobile_eye_open_probability_proxy',
+      source: 'mobile_eye_open_probability_event_detection',
       note:
-          'Proxy blink rate from eye-open probability transitions during social/mixed/speech stimuli.',
+          'Close mobile proxy. Blink rate from ML Kit eye-open probability events using closed/open hysteresis thresholds and valid blink-duration filtering during social/mixed/speech stimuli.',
     );
 
     setFeature(
@@ -224,11 +224,11 @@ class PaperPhenotypeMapper {
       value: _meanSummaryValueByStimuli(
         summariesByStimulus,
         allNonsocialLikeStimuli,
-        'blink_rate_per_min_proxy',
+        'blink_rate_per_min_event',
       ),
-      source: 'mobile_eye_open_probability_proxy',
+      source: 'mobile_eye_open_probability_event_detection',
       note:
-          'Proxy blink rate from eye-open probability transitions during nonsocial/mixed stimuli.',
+          'Close mobile proxy. Blink rate from ML Kit eye-open probability events using closed/open hysteresis thresholds and valid blink-duration filtering during nonsocial/mixed stimuli.',
     );
 
     setFeature(
@@ -452,6 +452,12 @@ class PaperPhenotypeMapper {
 
     await SessionService.saveJson(
       sessionDir: sessionDir,
+      fileName: SessionFileNames.responseToNameFeatures,
+      data: responseToName,
+    );
+
+    await SessionService.saveJson(
+      sessionDir: sessionDir,
       fileName: SessionFileNames.paperFeatureCoverage,
       data: coverage,
     );
@@ -596,6 +602,26 @@ class PaperPhenotypeMapper {
         continue;
       }
 
+      if (key == 'blink_rate_per_min_event') {
+        final double? eventRate = _toNullableDouble(
+          summary['blink_rate_per_min_event'],
+        );
+
+        if (eventRate != null) {
+          values.add(eventRate);
+          continue;
+        }
+
+        final double blinkCount = _toDouble(summary['blink_count_event']);
+        final double durationSec = _toDouble(summary['duration_sec']);
+
+        if (durationSec > 0) {
+          values.add(blinkCount / durationSec * 60.0);
+        }
+
+        continue;
+      }
+
       final double? value = _toNullableDouble(summary[key]);
 
       if (value != null) {
@@ -683,14 +709,26 @@ class PaperPhenotypeMapper {
 
     if (rawEvents is! List) {
       return {
+        'schema_version': 'mobile_response_to_name_features_v2',
         'mean_delay_sec': null,
         'response_proportion': null,
         'responded_count': 0,
         'total_name_calls': 0,
+        'events': [],
+        'proxy_rule': 'No triggered name-call events were available.',
       };
     }
 
+    const double baselineStartOffsetSec = -1.0;
+    const double baselineEndOffsetSec = 0.0;
+    const double responseStartOffsetSec = 0.3;
+    const double responseEndOffsetSec = 4.0;
+    const double headChangeThresholdDeg = 8.0;
+    const double headVelocityThresholdDegPerSec = 8.0;
+    const double gazeShiftThreshold = 0.12;
+
     final List<double> delays = [];
+    final List<Map<String, dynamic>> eventEvidence = [];
     int total = 0;
 
     for (final dynamic rawEvent in rawEvents) {
@@ -710,6 +748,12 @@ class PaperPhenotypeMapper {
       final dynamic actualTriggerTime = event['actual_global_trigger_time_sec'];
 
       if (actualTriggerTime == null) {
+        eventEvidence.add({
+          'cue_index': total,
+          'stimulus_id': stimulusId,
+          'responded': false,
+          'reason': 'missing_actual_trigger_time',
+        });
         continue;
       }
 
@@ -718,24 +762,116 @@ class PaperPhenotypeMapper {
       final List<Map<String, String>> rows =
           csvRowsByStimulus[stimulusId] ?? [];
 
-      double? detectedDelay;
-
-      for (final Map<String, String> row in rows) {
+      final List<Map<String, String>> baselineRows = rows.where((
+        Map<String, String> row,
+      ) {
         final double? elapsed = _toNullableDouble(row['elapsed_time']);
-        final double? movement = _toNullableDouble(row['head_movement']);
+        if (elapsed == null) return false;
+        final double relativeSec = elapsed - callTimeSec;
+        return relativeSec >= baselineStartOffsetSec &&
+            relativeSec <= baselineEndOffsetSec;
+      }).toList();
 
-        if (elapsed == null || movement == null) {
+      final List<Map<String, String>> responseRows = rows.where((
+        Map<String, String> row,
+      ) {
+        final double? elapsed = _toNullableDouble(row['elapsed_time']);
+        if (elapsed == null) return false;
+        final double relativeSec = elapsed - callTimeSec;
+        return relativeSec >= responseStartOffsetSec &&
+            relativeSec <= responseEndOffsetSec;
+      }).toList();
+
+      final double? baselineYaw = _meanColumn(baselineRows, 'yaw_proxy');
+      final double? baselinePitch = _meanColumn(baselineRows, 'pitch_proxy');
+      final double? baselineRoll = _meanColumn(baselineRows, 'roll_proxy_deg');
+      final double? baselineGazeX = _meanValidGazeColumn(baselineRows, 'gaze_x');
+      final double? baselineGazeY = _meanValidGazeColumn(baselineRows, 'gaze_y');
+
+      double? detectedDelay;
+      String responseSource = 'none';
+      Map<String, dynamic>? detectedEvidence;
+
+      double maxHeadChangeDeg = 0.0;
+      double maxHeadVelocity = 0.0;
+      double maxGazeShift = 0.0;
+
+      for (final Map<String, String> row in responseRows) {
+        final double? elapsed = _toNullableDouble(row['elapsed_time']);
+        if (elapsed == null) {
           continue;
         }
 
         final double afterCall = elapsed - callTimeSec;
+        final double? yaw = _toNullableDouble(row['yaw_proxy']);
+        final double? pitch = _toNullableDouble(row['pitch_proxy']);
+        final double? roll = _toNullableDouble(row['roll_proxy_deg']);
+        final double? headVelocity = _toNullableDouble(row['head_movement']);
+        final double? gazeX = row['gaze_valid'] == 'true'
+            ? _toNullableDouble(row['gaze_x'])
+            : null;
+        final double? gazeY = row['gaze_valid'] == 'true'
+            ? _toNullableDouble(row['gaze_y'])
+            : null;
 
-        if (afterCall < 0 || afterCall > 4.0) {
-          continue;
+        final double? headChangeDeg = _headPoseChangeDeg(
+          baselineYaw: baselineYaw,
+          baselinePitch: baselinePitch,
+          baselineRoll: baselineRoll,
+          yaw: yaw,
+          pitch: pitch,
+          roll: roll,
+        );
+
+        final double? gazeShift = _gazeShift(
+          baselineGazeX: baselineGazeX,
+          baselineGazeY: baselineGazeY,
+          gazeX: gazeX,
+          gazeY: gazeY,
+        );
+
+        if (headChangeDeg != null && headChangeDeg > maxHeadChangeDeg) {
+          maxHeadChangeDeg = headChangeDeg;
         }
 
-        if (movement >= 5.0) {
+        if (headVelocity != null && headVelocity > maxHeadVelocity) {
+          maxHeadVelocity = headVelocity;
+        }
+
+        if (gazeShift != null && gazeShift > maxGazeShift) {
+          maxGazeShift = gazeShift;
+        }
+
+        final bool respondedByHeadChange =
+            headChangeDeg != null && headChangeDeg >= headChangeThresholdDeg;
+        final bool respondedByHeadVelocity = headVelocity != null &&
+            headVelocity >= headVelocityThresholdDegPerSec;
+        final bool respondedByGazeShift =
+            gazeShift != null && gazeShift >= gazeShiftThreshold;
+
+        if (respondedByHeadChange ||
+            respondedByHeadVelocity ||
+            respondedByGazeShift) {
           detectedDelay = afterCall;
+          responseSource = _responseSourceLabel(
+            respondedByHeadChange: respondedByHeadChange,
+            respondedByHeadVelocity: respondedByHeadVelocity,
+            respondedByGazeShift: respondedByGazeShift,
+          );
+          detectedEvidence = {
+            'elapsed_time_sec': _round4(elapsed),
+            'response_delay_sec': _round4(afterCall),
+            'head_change_deg': headChangeDeg == null
+                ? null
+                : _round4(headChangeDeg),
+            'head_angular_velocity_deg_per_sec': headVelocity == null
+                ? null
+                : _round4(headVelocity),
+            'gaze_shift_normalized': gazeShift == null
+                ? null
+                : _round4(gazeShift),
+            'gaze_valid': gazeX != null && gazeY != null,
+          };
           break;
         }
       }
@@ -743,16 +879,137 @@ class PaperPhenotypeMapper {
       if (detectedDelay != null) {
         delays.add(detectedDelay);
       }
+
+      eventEvidence.add({
+        'cue_index': total,
+        'stimulus_id': stimulusId,
+        'call_time_sec': _round4(callTimeSec),
+        'responded': detectedDelay != null,
+        'response_delay_sec': detectedDelay == null
+            ? null
+            : _round4(detectedDelay),
+        'response_source': responseSource,
+        'baseline_sample_count': baselineRows.length,
+        'response_window_sample_count': responseRows.length,
+        'baseline': {
+          'yaw_proxy': baselineYaw == null ? null : _round4(baselineYaw),
+          'pitch_proxy': baselinePitch == null ? null : _round4(baselinePitch),
+          'roll_proxy_deg': baselineRoll == null ? null : _round4(baselineRoll),
+          'gaze_x': baselineGazeX == null ? null : _round4(baselineGazeX),
+          'gaze_y': baselineGazeY == null ? null : _round4(baselineGazeY),
+        },
+        'max_post_call_head_change_deg': _round4(maxHeadChangeDeg),
+        'max_post_call_head_velocity_deg_per_sec': _round4(maxHeadVelocity),
+        'max_post_call_gaze_shift_normalized': _round4(maxGazeShift),
+        'detected_frame': detectedEvidence,
+      });
     }
 
     return {
+      'schema_version': 'mobile_response_to_name_features_v2',
       'mean_delay_sec': delays.isEmpty ? null : _round4(_mean(delays)),
       'response_proportion': total == 0 ? null : _round4(delays.length / total),
       'responded_count': delays.length,
       'total_name_calls': total,
+      'events': eventEvidence,
+      'thresholds': {
+        'baseline_window_sec': [
+          baselineStartOffsetSec,
+          baselineEndOffsetSec,
+        ],
+        'response_window_sec': [
+          responseStartOffsetSec,
+          responseEndOffsetSec,
+        ],
+        'head_change_threshold_deg': headChangeThresholdDeg,
+        'head_velocity_threshold_deg_per_sec': headVelocityThresholdDegPerSec,
+        'gaze_shift_threshold_normalized': gazeShiftThreshold,
+      },
       'proxy_rule':
-          'First frame within 4 sec after call where head-pose angular velocity >= 5 deg/sec.',
+          'Response is detected when post-call head pose change, head angular velocity, or calibrated gaze shift crosses threshold within 0.3–4.0 sec after the cue.',
     };
+  }
+
+  static double? _meanValidGazeColumn(
+    List<Map<String, String>> rows,
+    String column,
+  ) {
+    final List<double> values = rows
+        .where((Map<String, String> row) => row['gaze_valid'] == 'true')
+        .map((Map<String, String> row) => _toNullableDouble(row[column]))
+        .whereType<double>()
+        .toList();
+
+    if (values.isEmpty) {
+      return null;
+    }
+
+    return _mean(values);
+  }
+
+  static double? _headPoseChangeDeg({
+    required double? baselineYaw,
+    required double? baselinePitch,
+    required double? baselineRoll,
+    required double? yaw,
+    required double? pitch,
+    required double? roll,
+  }) {
+    if (baselineYaw == null ||
+        baselinePitch == null ||
+        baselineRoll == null ||
+        yaw == null ||
+        pitch == null ||
+        roll == null) {
+      return null;
+    }
+
+    final double dYaw = yaw - baselineYaw;
+    final double dPitch = pitch - baselinePitch;
+    final double dRoll = roll - baselineRoll;
+
+    return sqrt((dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll));
+  }
+
+  static double? _gazeShift({
+    required double? baselineGazeX,
+    required double? baselineGazeY,
+    required double? gazeX,
+    required double? gazeY,
+  }) {
+    if (baselineGazeX == null ||
+        baselineGazeY == null ||
+        gazeX == null ||
+        gazeY == null) {
+      return null;
+    }
+
+    final double dx = gazeX - baselineGazeX;
+    final double dy = gazeY - baselineGazeY;
+
+    return sqrt((dx * dx) + (dy * dy));
+  }
+
+  static String _responseSourceLabel({
+    required bool respondedByHeadChange,
+    required bool respondedByHeadVelocity,
+    required bool respondedByGazeShift,
+  }) {
+    final List<String> parts = [];
+
+    if (respondedByHeadChange) {
+      parts.add('head_pose_change');
+    }
+
+    if (respondedByHeadVelocity) {
+      parts.add('head_angular_velocity');
+    }
+
+    if (respondedByGazeShift) {
+      parts.add('calibrated_gaze_shift');
+    }
+
+    return parts.isEmpty ? 'none' : parts.join('+');
   }
 
   static dynamic _valueFromNested(

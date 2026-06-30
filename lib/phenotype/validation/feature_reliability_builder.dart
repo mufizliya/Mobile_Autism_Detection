@@ -44,6 +44,12 @@ class FeatureReliabilityBuilder {
       fileName: SessionFileNames.stimulusEvents,
     );
 
+    final Map<String, dynamic>? responseToNameFeatures =
+        await SessionService.readJsonIfExists(
+      sessionDir: sessionDir,
+      fileName: SessionFileNames.responseToNameFeatures,
+    );
+
     final Map<String, dynamic> values = paperAlignedFeatures?['values'] is Map
         ? Map<String, dynamic>.from(paperAlignedFeatures!['values'] as Map)
         : <String, dynamic>{};
@@ -65,6 +71,7 @@ class FeatureReliabilityBuilder {
       calibratedGazeFrames: calibratedGazeFrames,
       gazeCalibrationQuality: gazeCalibrationQuality,
       stimulusEvents: stimulusEvents,
+      responseToNameFeatures: responseToNameFeatures,
       gameMetrics: gameMetrics,
     );
 
@@ -169,6 +176,7 @@ class FeatureReliabilityBuilder {
     required Map<String, dynamic>? calibratedGazeFrames,
     required Map<String, dynamic>? gazeCalibrationQuality,
     required Map<String, dynamic>? stimulusEvents,
+    required Map<String, dynamic>? responseToNameFeatures,
     required Map<String, dynamic>? gameMetrics,
   }) {
     final Map<String, dynamic> frameSummary =
@@ -235,6 +243,45 @@ class FeatureReliabilityBuilder {
 
     final bool strongNameCallQuality = observedNameCalls == 3;
 
+    final int totalResponseCues = _intNumber(
+      responseToNameFeatures?['total_name_calls'],
+    );
+
+    final int respondedCount = _intNumber(
+      responseToNameFeatures?['responded_count'],
+    );
+
+    final double responseProportion = _number(
+      responseToNameFeatures?['response_proportion'],
+    );
+
+    final dynamic rawResponseEvents = responseToNameFeatures == null
+        ? null
+        : responseToNameFeatures['events'];
+
+    final List<dynamic> responseEvents = rawResponseEvents is List
+        ? rawResponseEvents
+        : <dynamic>[];
+
+    final bool hasGazeShiftEvidence = responseEvents.any((dynamic item) {
+      if (item is! Map) return false;
+      final String source = item['response_source']?.toString() ?? '';
+      return source.contains('calibrated_gaze_shift');
+    });
+
+    final bool hasHeadEvidence = responseEvents.any((dynamic item) {
+      if (item is! Map) return false;
+      final String source = item['response_source']?.toString() ?? '';
+      return source.contains('head_pose_change') ||
+          source.contains('head_angular_velocity');
+    });
+
+    final bool strongResponseToNameQuality = strongFramewiseQuality &&
+        strongNameCallQuality &&
+        totalResponseCues >= 3 &&
+        responseEvents.length >= 3 &&
+        (hasHeadEvidence || hasGazeShiftEvidence);
+
     final bool bubbleGameCompleted =
         gameMetrics != null && _intNumber(gameMetrics['total_reactions']) > 0;
 
@@ -258,6 +305,13 @@ class FeatureReliabilityBuilder {
         'observed_name_call_count': observedNameCalls,
         'expected_name_call_count': 3,
         'strong_name_call_quality': strongNameCallQuality,
+        'response_feature_file_available': responseToNameFeatures != null,
+        'response_total_cues': totalResponseCues,
+        'response_responded_count': respondedCount,
+        'response_proportion': round4(responseProportion),
+        'has_head_response_evidence': hasHeadEvidence,
+        'has_gaze_shift_response_evidence': hasGazeShiftEvidence,
+        'strong_response_to_name_quality': strongResponseToNameQuality,
       },
       'bubble_game': {
         'completed': bubbleGameCompleted,
@@ -285,10 +339,6 @@ class FeatureReliabilityBuilder {
       ['gaze', 'strong_gaze_quality'],
     );
 
-    final bool strongNameCallQuality = _boolNested(
-      qualityContext,
-      ['name_call', 'strong_name_call_quality'],
-    );
 
     final bool bubbleGameCompleted = _boolNested(
       qualityContext,
@@ -409,15 +459,21 @@ class FeatureReliabilityBuilder {
         );
       }
 
-      final bool highEnough = strongFramewiseQuality && strongNameCallQuality;
+      final Map<String, dynamic> nameCallQuality =
+          qualityContext['name_call'] is Map
+              ? Map<String, dynamic>.from(qualityContext['name_call'] as Map)
+              : <String, dynamic>{};
+
+      final bool highEnough =
+          nameCallQuality['strong_response_to_name_quality'] == true;
 
       return _result(
         status: highEnough ? 'computed_close_proxy' : 'computed_proxy',
         source: source,
-        confidence: highEnough ? 'medium_high' : 'medium',
+        confidence: highEnough ? 'high' : 'medium_high',
         reason: highEnough
-            ? 'Computed from actual playback-time name-call triggers and post-call head movement evidence. All expected name-call cues were observed, but this still uses a head-movement response proxy until gaze-shift response logic is added.'
-            : 'Computed from name-call/head-movement proxy, but name-call timing or framewise quality gates were not fully strong.',
+            ? 'Computed from actual playback-time name-call triggers using post-call head-pose change, head angular velocity, and calibrated gaze-shift evidence. Framewise and cue-trigger quality gates passed, so this is a stronger mobile response-to-name proxy.'
+            : 'Computed from actual name-call timing and post-call head/gaze evidence, but one or more response-to-name quality gates were not fully strong.',
         evidence: {
           'framewise': qualityContext['framewise'],
           'name_call': qualityContext['name_call'],
@@ -460,12 +516,19 @@ class FeatureReliabilityBuilder {
         );
       }
 
+      final bool usesBlinkEvents = source.contains('event_detection');
+
       return _result(
-        status: 'computed_proxy',
+        status: usesBlinkEvents ? 'computed_close_proxy' : 'computed_proxy',
         source: source,
-        confidence: strongFramewiseQuality ? 'medium_high' : 'medium',
-        reason:
-            'Computed from ML Kit eye-open probability transitions. Useful mobile proxy, but not upgraded to high until explicit blink-event duration filtering is added.',
+        confidence: usesBlinkEvents && strongFramewiseQuality
+            ? 'medium'
+            : strongFramewiseQuality
+            ? 'medium'
+            : 'low',
+        reason: usesBlinkEvents
+            ? 'Computed from sampled ML Kit eye-open probability events. Current frame sampling is sparse for exact blink-duration measurement, so this remains a useful mobile proxy rather than a high-confidence blink signal.'
+            : 'Computed from simple ML Kit eye-open probability transitions. Useful mobile proxy, but weaker than explicit blink-event detection.',
         evidence: qualityContext['framewise'],
       );
     }
@@ -575,7 +638,7 @@ class FeatureReliabilityBuilder {
       'source': source,
       'confidence': confidence,
       'reason': reason,
-      'evidence': ?evidence,
+      if (evidence != null) 'evidence': evidence,
     };
   }
 

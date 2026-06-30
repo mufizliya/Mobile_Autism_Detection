@@ -214,9 +214,8 @@ class FramewiseLogExporter {
             final double dPitch = pitch - previousPitch;
             final double dRoll = roll - previousRoll;
 
-            headMovement = sqrt(
-              (dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll),
-            ) / dt;
+            headMovement =
+                sqrt((dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll)) / dt;
 
             if (previousAngularVelocity != null) {
               headAcceleration =
@@ -319,7 +318,14 @@ class FramewiseLogExporter {
         .whereType<double>()
         .toList();
 
-    final int blinkCount = _countBlinks(avgEyes);
+    final Map<String, dynamic> blinkEvents = _detectBlinkEvents(frames);
+
+    final int blinkCountProxy = _countBlinks(avgEyes);
+    final int blinkCountEvent = _intNumber(blinkEvents['blink_count']);
+    final double durationSecForBlink = max(0.0, globalEndSec - globalStartSec);
+    final double? blinkRatePerMinEvent = durationSecForBlink <= 0
+        ? null
+        : blinkCountEvent / durationSecForBlink * 60.0;
 
     final List<double> yawValues = frames
         .map((Map<String, dynamic> frame) => _nullableNumber(frame['head_yaw']))
@@ -340,7 +346,9 @@ class FramewiseLogExporter {
         .whereType<double>()
         .toList();
 
-    final Map<String, dynamic> headDynamics = _headAngularDynamicsSummary(frames);
+    final Map<String, dynamic> headDynamics = _headAngularDynamicsSummary(
+      frames,
+    );
 
     final List<double> mouthOpenValues = frames
         .map(
@@ -372,7 +380,12 @@ class FramewiseLogExporter {
       'total_frame_count': totalFrameCount,
       'valid_face_frame_count': validFaceFrameCount,
       'face_presence_ratio': _round4(facePresenceRatio),
-      'blink_count_proxy': blinkCount,
+      'blink_count_proxy': blinkCountProxy,
+      'blink_count_event': blinkCountEvent,
+      'blink_rate_per_min_event': blinkRatePerMinEvent == null
+          ? null
+          : _round4(blinkRatePerMinEvent),
+      'blink_event_detection': blinkEvents,
       'mean_eye_open_probability': _round4(_mean(avgEyes)),
       'mean_yaw_proxy': _round4(_mean(yawValues)),
       'mean_pitch_proxy': _round4(_mean(pitchValues)),
@@ -392,7 +405,8 @@ class FramewiseLogExporter {
       'eyebrow_complexity_proxy': eyebrowSignalValues.length <= 1
           ? null
           : _round4(_std(eyebrowSignalValues)),
-      'measurement_source': 'mobile_native_mlkit_mediapipe_head_pose_contour_to_python_csv',
+      'measurement_source':
+          'mobile_native_mlkit_mediapipe_head_pose_contour_to_python_csv',
     };
   }
 
@@ -433,9 +447,8 @@ class FramewiseLogExporter {
           final double dPitch = pitch - previousPitch;
           final double dRoll = roll - previousRoll;
 
-          final double velocity = sqrt(
-            (dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll),
-          ) / dt;
+          final double velocity =
+              sqrt((dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll)) / dt;
 
           velocities.add(velocity);
 
@@ -465,6 +478,121 @@ class FramewiseLogExporter {
           : _round4(_mean(accelerations)),
       'valid_velocity_sample_count': velocities.length,
       'valid_acceleration_sample_count': accelerations.length,
+    };
+  }
+
+  static Map<String, dynamic> _detectBlinkEvents(
+    List<Map<String, dynamic>> frames,
+  ) {
+    const double closedThreshold = 0.35;
+    const double openThreshold = 0.65;
+
+    final List<Map<String, dynamic>> events = [];
+
+    bool inClosedCluster = false;
+    double? clusterStartSec;
+    double? lowestEyeOpenDuringBlink;
+    int closedSampleCount = 0;
+
+    int validEyeSampleCount = 0;
+    double? previousValidTimeSec;
+
+    final List<double> sampleIntervalsSec = [];
+
+    for (final Map<String, dynamic> frame in frames) {
+      final double? left = _nullableNumber(frame['left_eye_open_probability']);
+      final double? right = _nullableNumber(
+        frame['right_eye_open_probability'],
+      );
+
+      if (left == null || right == null) {
+        continue;
+      }
+
+      final double eyeOpen = (left + right) / 2.0;
+      final double timeSec = _number(frame['time_ms']) / 1000.0;
+
+      if (previousValidTimeSec != null) {
+        final double interval = timeSec - previousValidTimeSec;
+        if (interval > 0) {
+          sampleIntervalsSec.add(interval);
+        }
+      }
+
+      previousValidTimeSec = timeSec;
+      validEyeSampleCount += 1;
+
+      final bool closed = eyeOpen <= closedThreshold;
+      final bool confidentlyOpen = eyeOpen >= openThreshold;
+
+      if (closed) {
+        if (!inClosedCluster) {
+          inClosedCluster = true;
+          clusterStartSec = timeSec;
+          lowestEyeOpenDuringBlink = eyeOpen;
+          closedSampleCount = 1;
+        } else {
+          closedSampleCount += 1;
+
+          if (lowestEyeOpenDuringBlink == null ||
+              eyeOpen < lowestEyeOpenDuringBlink) {
+            lowestEyeOpenDuringBlink = eyeOpen;
+          }
+        }
+
+        continue;
+      }
+
+      if (inClosedCluster && confidentlyOpen) {
+        final double startSec = clusterStartSec ?? timeSec;
+        final double endSec = timeSec;
+
+        final double durationSec = max(0.0, endSec - startSec);
+
+        // With sparse 2 FPS sampling, true blink duration cannot be measured
+        // accurately. So we count short closed clusters as sampled blink events.
+        final bool validSampledBlink =
+            closedSampleCount <= 2 && lowestEyeOpenDuringBlink != null;
+
+        if (validSampledBlink) {
+          events.add({
+            'start_time_sec': _round4(startSec),
+            'end_time_sec': _round4(endSec),
+            'duration_sec_sampled': _round4(durationSec),
+            'closed_sample_count': closedSampleCount,
+            'lowest_eye_open_probability': _round4(lowestEyeOpenDuringBlink),
+            'confidence_note':
+                'Sampled blink event from sparse framewise eye-open probability; exact blink duration is approximate.',
+          });
+        }
+
+        inClosedCluster = false;
+        clusterStartSec = null;
+        lowestEyeOpenDuringBlink = null;
+        closedSampleCount = 0;
+      }
+    }
+
+    final double meanSampleIntervalSec = sampleIntervalsSec.isEmpty
+        ? 0.0
+        : _mean(sampleIntervalsSec);
+
+    final double estimatedSamplingFps = meanSampleIntervalSec <= 0
+        ? 0.0
+        : 1.0 / meanSampleIntervalSec;
+
+    return {
+      'method': 'sampled_hysteresis_eye_open_probability_event_detection',
+      'blink_count': events.length,
+      'valid_eye_sample_count': validEyeSampleCount,
+      'estimated_sampling_fps': _round4(estimatedSamplingFps),
+      'mean_sample_interval_sec': _round4(meanSampleIntervalSec),
+      'closed_threshold': closedThreshold,
+      'open_threshold': openThreshold,
+      'events': events,
+      'quality_note': estimatedSamplingFps < 8.0
+          ? 'Frame sampling is sparse for exact blink duration. Blink count is a sampled mobile proxy.'
+          : 'Frame sampling is sufficient for stronger blink event detection.',
     };
   }
 
