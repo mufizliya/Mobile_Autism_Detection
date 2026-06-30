@@ -10,15 +10,15 @@ class CalibratedGazeBuilder {
   }) async {
     final Map<String, dynamic>? calibration =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.gazeCalibration,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.gazeCalibration,
+        );
 
     final Map<String, dynamic>? framewiseSignals =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.framewiseFaceSignals,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.framewiseFaceSignals,
+        );
 
     if (calibration == null || framewiseSignals == null) {
       final Map<String, dynamic> emptyPayload = {
@@ -39,20 +39,17 @@ class CalibratedGazeBuilder {
       return emptyPayload;
     }
 
-    final Map<String, dynamic> mapping =
-        calibration['mapping'] is Map
-            ? Map<String, dynamic>.from(calibration['mapping'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> mapping = calibration['mapping'] is Map
+        ? Map<String, dynamic>.from(calibration['mapping'] as Map)
+        : <String, dynamic>{};
 
-    final Map<String, dynamic> gazeXMapping =
-        mapping['gaze_x'] is Map
-            ? Map<String, dynamic>.from(mapping['gaze_x'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> gazeXMapping = mapping['gaze_x'] is Map
+        ? Map<String, dynamic>.from(mapping['gaze_x'] as Map)
+        : <String, dynamic>{};
 
-    final Map<String, dynamic> gazeYMapping =
-        mapping['gaze_y'] is Map
-            ? Map<String, dynamic>.from(mapping['gaze_y'] as Map)
-            : <String, dynamic>{};
+    final Map<String, dynamic> gazeYMapping = mapping['gaze_y'] is Map
+        ? Map<String, dynamic>.from(mapping['gaze_y'] as Map)
+        : <String, dynamic>{};
 
     final String gazeXInput =
         gazeXMapping['input']?.toString() ?? 'average_iris_in_eye_x';
@@ -74,6 +71,10 @@ class CalibratedGazeBuilder {
     int validGazeCount = 0;
     int irisFrameCount = 0;
 
+    int xClippedCount = 0;
+    int yClippedCount = 0;
+    int anyClippedCount = 0;
+
     for (final Map<String, dynamic> frame in rawFrames) {
       final bool hasIris = frame['has_iris_landmarks'] == true;
 
@@ -81,18 +82,18 @@ class CalibratedGazeBuilder {
         irisFrameCount += 1;
       }
 
-      final double? xInput = extractInput(
-        inputName: gazeXInput,
-        frame: frame,
-      );
+      final double? xInput = extractInput(inputName: gazeXInput, frame: frame);
 
-      final double? yInput = extractInput(
-        inputName: gazeYInput,
-        frame: frame,
-      );
+      final double? yInput = extractInput(inputName: gazeYInput, frame: frame);
 
       double? gazeX;
       double? gazeY;
+
+      double? rawGazeX;
+      double? rawGazeY;
+
+      bool xClipped = false;
+      bool yClipped = false;
 
       if (hasIris &&
           xInput != null &&
@@ -101,9 +102,28 @@ class CalibratedGazeBuilder {
           xSlope != null &&
           yIntercept != null &&
           ySlope != null) {
-        gazeX = clamp01(xIntercept + xSlope * xInput);
-        gazeY = clamp01(yIntercept + ySlope * yInput);
+        rawGazeX = xIntercept + xSlope * xInput;
+        rawGazeY = yIntercept + ySlope * yInput;
+
+        xClipped = rawGazeX < 0.0 || rawGazeX > 1.0;
+        yClipped = rawGazeY < 0.0 || rawGazeY > 1.0;
+
+        gazeX = clamp01(rawGazeX);
+        gazeY = clamp01(rawGazeY);
+
         validGazeCount += 1;
+
+        if (xClipped) {
+          xClippedCount += 1;
+        }
+
+        if (yClipped) {
+          yClippedCount += 1;
+        }
+
+        if (xClipped || yClipped) {
+          anyClippedCount += 1;
+        }
       }
 
       calibratedFrames.add({
@@ -114,6 +134,11 @@ class CalibratedGazeBuilder {
         'has_iris_landmarks': hasIris,
         'gaze_x': gazeX == null ? null : round4(gazeX),
         'gaze_y': gazeY == null ? null : round4(gazeY),
+        'raw_gaze_x': rawGazeX == null ? null : round4(rawGazeX),
+        'raw_gaze_y': rawGazeY == null ? null : round4(rawGazeY),
+        'gaze_x_clipped': xClipped,
+        'gaze_y_clipped': yClipped,
+        'any_gaze_clipped': xClipped || yClipped,
         'gaze_valid': gazeX != null && gazeY != null,
         'gaze_x_input_name': gazeXInput,
         'gaze_y_input_name': gazeYInput,
@@ -131,6 +156,26 @@ class CalibratedGazeBuilder {
         ? 0.0
         : irisFrameCount / calibratedFrames.length;
 
+    final double xClippedRatio = validGazeCount == 0
+        ? 0.0
+        : xClippedCount / validGazeCount;
+
+    final double yClippedRatio = validGazeCount == 0
+        ? 0.0
+        : yClippedCount / validGazeCount;
+
+    final double anyClippedRatio = validGazeCount == 0
+        ? 0.0
+        : anyClippedCount / validGazeCount;
+
+    String gazeClippingStatus = 'valid';
+
+    if (validGazeCount == 0) {
+      gazeClippingStatus = 'failed';
+    } else if (xClippedRatio > 0.25 || yClippedRatio > 0.50) {
+      gazeClippingStatus = 'warning';
+    }
+
     final Map<String, dynamic> payload = {
       'schema_version': 'mobile_calibrated_iris_gaze_v2',
       'generated_at': DateTime.now().toIso8601String(),
@@ -142,10 +187,22 @@ class CalibratedGazeBuilder {
       'valid_gaze_frame_count': validGazeCount,
       'iris_frame_ratio': round4(irisRatio),
       'valid_gaze_ratio': round4(validRatio),
-      'mapping': {
-        'gaze_x': gazeXMapping,
-        'gaze_y': gazeYMapping,
+      'gaze_clipping': {
+        'status': gazeClippingStatus,
+        'x_clipped_count': xClippedCount,
+        'y_clipped_count': yClippedCount,
+        'any_clipped_count': anyClippedCount,
+        'x_clipped_ratio': round4(xClippedRatio),
+        'y_clipped_ratio': round4(yClippedRatio),
+        'any_clipped_ratio': round4(anyClippedRatio),
+        'rule': {
+          'valid': 'x clipped ratio <= 0.25 and y clipped ratio <= 0.50.',
+          'warning':
+              'One or both gaze axes are frequently clipped to screen edges.',
+          'failed': 'No valid calibrated gaze frames were available.',
+        },
       },
+      'mapping': {'gaze_x': gazeXMapping, 'gaze_y': gazeYMapping},
       'frames': calibratedFrames,
     };
 

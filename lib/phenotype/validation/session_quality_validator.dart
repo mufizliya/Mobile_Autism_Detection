@@ -9,35 +9,40 @@ class SessionQualityValidator {
   }) async {
     final List<FileSystemEntity> entities = await sessionDir.list().toList();
 
-    final List<String> allFiles = entities
-        .whereType<File>()
-        .map((File file) => file.uri.pathSegments.last)
-        .toList()
-      ..sort();
-
+    final List<String> allFiles =
+        entities
+            .whereType<File>()
+            .map((File file) => file.uri.pathSegments.last)
+            .toList()
+          ..sort();
+    final Map<String, dynamic>? calibratedGazeFrames =
+        await SessionService.readJsonIfExists(
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.calibratedGazeFrames,
+        );
     final Map<String, dynamic>? framewiseFaceSignals =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.framewiseFaceSignals,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.framewiseFaceSignals,
+        );
 
     final Map<String, dynamic>? stimulusEvents =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.stimulusEvents,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.stimulusEvents,
+        );
 
     final Map<String, dynamic>? gameMetrics =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.gameMetrics,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.gameMetrics,
+        );
 
     final Map<String, dynamic>? paperFeatureCoverage =
         await SessionService.readJsonIfExists(
-      sessionDir: sessionDir,
-      fileName: SessionFileNames.paperFeatureCoverage,
-    );
+          sessionDir: sessionDir,
+          fileName: SessionFileNames.paperFeatureCoverage,
+        );
 
     final List<String> framewiseCsvFiles = allFiles
         .where((String fileName) => fileName.endsWith('_framewise_log.csv'))
@@ -69,12 +74,41 @@ class SessionQualityValidator {
       });
     }
 
+    final Map<String, dynamic> gazeClipping =
+        calibratedGazeFrames?['gaze_clipping'] is Map
+        ? Map<String, dynamic>.from(
+            calibratedGazeFrames!['gaze_clipping'] as Map,
+          )
+        : <String, dynamic>{};
+
+    final double yClippedRatio = number(gazeClipping['y_clipped_ratio']);
+
+    final double xClippedRatio = number(gazeClipping['x_clipped_ratio']);
+
+    checks.add({
+      'id': 'calibrated_gaze_clipping',
+      'severity': 'warning',
+      'passed':
+          calibratedGazeFrames != null &&
+          xClippedRatio <= 0.25 &&
+          yClippedRatio <= 0.50,
+      'observed': {
+        'x_clipped_ratio': round4(xClippedRatio),
+        'y_clipped_ratio': round4(yClippedRatio),
+        'status': gazeClipping['status'],
+      },
+      'expected':
+          'calibrated_gaze_frames.json exists, x_clipped_ratio <= 0.25, y_clipped_ratio <= 0.50',
+      'message':
+          'Calibrated gaze should not be frequently clipped to the screen edges.',
+    });
+
     final int frameCount = _toInt(framewiseFaceSignals?['frame_count']);
 
     final Map<String, dynamic> frameSummary =
         framewiseFaceSignals?['summary'] is Map
-            ? Map<String, dynamic>.from(framewiseFaceSignals!['summary'] as Map)
-            : <String, dynamic>{};
+        ? Map<String, dynamic>.from(framewiseFaceSignals!['summary'] as Map)
+        : <String, dynamic>{};
 
     final double facePresenceRatio = _toDouble(
       frameSummary['face_presence_ratio'],
@@ -127,22 +161,22 @@ class SessionQualityValidator {
       expected: 9,
     );
 
-    final dynamic rawTriggeredEvents =
-        stimulusEvents == null ? null : stimulusEvents['triggered_name_call_events'];
+    final dynamic rawTriggeredEvents = stimulusEvents == null
+        ? null
+        : stimulusEvents['triggered_name_call_events'];
 
-    final List<dynamic> triggeredEvents =
-        rawTriggeredEvents is List ? rawTriggeredEvents : <dynamic>[];
+    final List<dynamic> triggeredEvents = rawTriggeredEvents is List
+        ? rawTriggeredEvents
+        : <dynamic>[];
 
-    final int observedNameCalls = triggeredEvents.where(
-      (dynamic item) {
-        if (item is! Map) {
-          return false;
-        }
+    final int observedNameCalls = triggeredEvents.where((dynamic item) {
+      if (item is! Map) {
+        return false;
+      }
 
-        return item['triggered'] == true &&
-            item['actual_global_trigger_time_sec'] != null;
-      },
-    ).length;
+      return item['triggered'] == true &&
+          item['actual_global_trigger_time_sec'] != null;
+    }).length;
 
     addCheck(
       id: 'actual_name_call_triggers',
@@ -172,8 +206,8 @@ class SessionQualityValidator {
 
     final Map<String, dynamic> touchFeatures =
         gameMetrics?['touch_features'] is Map
-            ? Map<String, dynamic>.from(gameMetrics!['touch_features'] as Map)
-            : <String, dynamic>{};
+        ? Map<String, dynamic>.from(gameMetrics!['touch_features'] as Map)
+        : <String, dynamic>{};
 
     addCheck(
       id: 'touch_force_availability',
@@ -306,5 +340,21 @@ class SessionQualityValidator {
     }
 
     return 0.0;
+  }
+
+  static double number(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+
+    return 0.0;
+  }
+
+  static double round4(double value) {
+    return double.parse(value.toStringAsFixed(4));
   }
 }

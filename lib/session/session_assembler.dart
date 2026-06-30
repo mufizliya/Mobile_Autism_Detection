@@ -168,6 +168,9 @@ class SessionAssembler {
         'valid_gaze_frame_count':
             calibratedGazeFrames?['valid_gaze_frame_count'],
         'valid_gaze_ratio': calibratedGazeFrames?['valid_gaze_ratio'],
+        'iris_frame_count': calibratedGazeFrames?['iris_frame_count'],
+        'iris_frame_ratio': calibratedGazeFrames?['iris_frame_ratio'],
+        'gaze_clipping': calibratedGazeFrames?['gaze_clipping'],
       },
       'completed_modules': [
         if (childInfo != null) 'child_info',

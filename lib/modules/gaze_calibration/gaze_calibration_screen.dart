@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-
+import 'package:flutter/services.dart';
 import '../../native/native_iris_recorder_service.dart';
 import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
@@ -50,6 +50,20 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
     {'id': 'bottom_center', 'target_x': 0.50, 'target_y': 0.85},
     {'id': 'bottom_right', 'target_x': 0.85, 'target_y': 0.85},
   ];
+  @override
+  void initState() {
+    super.initState();
+    enterLandscapeFullscreen();
+  }
+
+  Future<void> enterLandscapeFullscreen() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+    await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
 
   @override
   void dispose() {
@@ -601,6 +615,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Look and Follow')),
+      backgroundColor: Colors.black,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
