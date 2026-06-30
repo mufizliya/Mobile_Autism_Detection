@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../modules/summary/session_summary_screen.dart';
 import '../../session/session_file_names.dart';
@@ -84,11 +85,31 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
   double latestPointerRadiusMajor = 0.0;
   double latestPointerRadiusMinor = 0.0;
   PointerDeviceKind latestPointerKind = PointerDeviceKind.touch;
+  Future<void> setPortraitMode() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
+
+  Future<void> stopAllAudio() async {
+    try {
+      await backgroundMusicPlayer.stop();
+    } catch (_) {}
+
+    for (final AudioPlayer player in popSoundPlayers) {
+      try {
+        await player.stop();
+      } catch (_) {}
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-
+    setPortraitMode();
     ticker = createTicker(handleTick);
 
     Future<void>.delayed(const Duration(seconds: 2), () {
@@ -104,9 +125,11 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
   void dispose() {
     ticker.dispose();
 
+    backgroundMusicPlayer.stop();
     backgroundMusicPlayer.dispose();
 
     for (final AudioPlayer player in popSoundPlayers) {
+      player.stop();
       player.dispose();
     }
 
@@ -548,7 +571,7 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
       'paper_pop_the_bubbles_average_touch_length':
           touchFeatures['touch_average_length'] ?? 0,
       'paper_pop_the_bubbles_average_applied_force':
-          touchFeatures['touch_average_applied_force'] ?? 0,
+          touchFeatures['touch_average_applied_force'],
       'touch_force_available': touchFeatures['touch_force_available'] == true,
       'game_duration_sec': gameDurationSec,
       'spawn_interval_min_sec': spawnIntervalMinSec,
@@ -777,8 +800,14 @@ class _BubbleGameScreenState extends State<BubbleGameScreen>
     return double.parse(value.toStringAsFixed(4));
   }
 
-  void goToSummary() {
-    Navigator.of(context).push(
+  Future<void> goToSummary() async {
+    await stopAllAudio();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (BuildContext context) {
           return SessionSummaryScreen(
@@ -1187,7 +1216,7 @@ class _EndOverlay extends StatelessWidget {
   const _EndOverlay({required this.score, required this.onContinue});
 
   final int score;
-  final VoidCallback onContinue;
+  final Future<void> Function() onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -1222,8 +1251,10 @@ class _EndOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: onContinue,
-                child: const Text('Continue to session summary'),
+                onPressed: () async {
+                  await onContinue();
+                },
+                child: const Text('Continue'),
               ),
             ],
           ),

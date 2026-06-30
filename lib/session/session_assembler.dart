@@ -57,12 +57,6 @@ class SessionAssembler {
           fileName: SessionFileNames.gazeCalibrationQuality,
         );
 
-    final Map<String, dynamic>? videoIrisSignals =
-        await SessionService.readJsonIfExists(
-          sessionDir: sessionDir,
-          fileName: SessionFileNames.videoIrisSignals,
-        );
-
     final Map<String, dynamic>? calibratedGazeFrames =
         await SessionService.readJsonIfExists(
           sessionDir: sessionDir,
@@ -133,7 +127,6 @@ class SessionAssembler {
       SessionFileNames.gazeCalibrationRawIris: allFiles.contains(
         SessionFileNames.gazeCalibrationRawIris,
       ),
-      SessionFileNames.videoIrisSignals: videoIrisSignals != null,
       SessionFileNames.calibratedGazeFrames: calibratedGazeFrames != null,
       SessionFileNames.gameMetrics: gameMetrics != null,
       SessionFileNames.phenotypeVector: true,
@@ -169,7 +162,6 @@ class SessionAssembler {
       'session_quality': sessionQuality,
       'feature_reliability': featureReliability,
       'gaze_calibration_quality': gazeCalibrationQuality,
-      'video_iris_signals_summary': videoIrisSignals?['summary'],
       'calibrated_gaze_summary': {
         'status': calibratedGazeFrames?['status'],
         'frame_count': calibratedGazeFrames?['frame_count'],

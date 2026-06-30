@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'framewise_log_exporter.dart';
@@ -8,7 +8,6 @@ import '../../session/session_file_names.dart';
 import '../../session/session_service.dart';
 import 'stimulus_protocol_service.dart';
 import '../../native/native_face_recorder_service.dart';
-//import '../../native/native_iris_recorder_service.dart';
 import 'calibrated_gaze_builder.dart';
 import '../bubble_game/bubble_game_screen.dart';
 
@@ -50,11 +49,35 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
   DateTime? playbackStartedAt;
   DateTime? playbackCompletedAt;
+  @override
+  void initState() {
+    super.initState();
+    enterLandscapeFullscreen();
+  }
+
+  Future<void> enterLandscapeFullscreen() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+    await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  Future<void> exitLandscapeFullscreen() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
 
   @override
   void dispose() {
     cueTimer?.cancel();
     controller?.dispose();
+    exitLandscapeFullscreen();
     super.dispose();
   }
 
@@ -195,11 +218,6 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     alreadyLoggedNameCallIds.clear();
 
     await NativeFaceRecorderService.start();
-    // try {
-    //   await NativeIrisRecorderService.start();
-    // } catch (error) {
-    //   debugPrint('Iris recorder start failed: $error');
-    // }
     await currentController.seekTo(Duration.zero);
     await currentController.play();
 
@@ -387,18 +405,6 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
     }
     final Map<String, dynamic> calibratedGazePayload =
         await CalibratedGazeBuilder.buildAndSave(sessionDir: widget.sessionDir);
-    // Map<String, dynamic>? irisPayload;
-
-    // try {
-    //   irisPayload = await NativeIrisRecorderService.stopAndSave(
-    //     sessionDir: widget.sessionDir,
-    //     fileName: SessionFileNames.videoIrisSignals,
-    //   );
-    // } catch (error) {
-    //   debugPrint('Iris recorder stop/save failed: $error');
-    // }
-    // final Map<String, dynamic> calibratedGazePayload =
-    //     await CalibratedGazeBuilder.buildAndSave(sessionDir: widget.sessionDir);
 
     Map<String, dynamic>? framewiseExportSummary;
 
@@ -425,16 +431,6 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
       'framewise_face_signals_file': SessionFileNames.framewiseFaceSignals,
       'framewise_face_signals_summary': framewisePayload['summary'],
       'framewise_csv_export': framewiseExportSummary,
-      'Calibrated gaze frames: ${calibratedGazePayload['valid_gaze_frame_count']}'
-      'actual_name_call_trigger_logging': {
-        'enabled': true,
-        'method': 'flutter_video_player_position_timer',
-        'timer_interval_ms': 100,
-        'trigger_window_sec': 0.35,
-        'scheduled_count': scheduledEvents.length,
-        'observed_triggered_count': observedTriggeredCount,
-        'events_file': SessionFileNames.stimulusEvents,
-      },
       'calibrated_gaze': {
         'enabled': true,
         'file': SessionFileNames.calibratedGazeFrames,
@@ -444,6 +440,15 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
             calibratedGazePayload['valid_gaze_frame_count'],
         'valid_gaze_ratio': calibratedGazePayload['valid_gaze_ratio'],
         'source': 'mobile_unified_recorder_iris_calibrated_gaze',
+      },
+      'actual_name_call_trigger_logging': {
+        'enabled': true,
+        'method': 'flutter_video_player_position_timer',
+        'timer_interval_ms': 100,
+        'trigger_window_sec': 0.35,
+        'scheduled_count': scheduledEvents.length,
+        'observed_triggered_count': observedTriggeredCount,
+        'events_file': SessionFileNames.stimulusEvents,
       },
       'status': 'completed',
       'started_at': playbackStartedAt?.toIso8601String(),
@@ -521,137 +526,168 @@ class _VideoProtocolScreenState extends State<VideoProtocolScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String childName = widget.childInfo['name']?.toString().trim() ?? '';
+    final VideoPlayerController? videoController = controller;
 
-    final VideoPlayerController? currentController = controller;
-    final bool videoReady =
-        currentController != null && currentController.value.isInitialized;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Video Protocol')),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Child: $childName',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'This step plays the master protocol video and shows parent name-call cues. '
-                      'Framewise CSV recording is not attached yet.',
-                    ),
-                    const SizedBox(height: 20),
-
-                    if (videoReady)
-                      AspectRatio(
-                        aspectRatio: currentController.value.aspectRatio,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            VideoPlayer(currentController),
-                            if (activeParentCue.isNotEmpty)
-                              Positioned(
-                                bottom: 24,
-                                left: 16,
-                                right: 16,
-                                child: Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.75),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    activeParentCue,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        height: 220,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.black12,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text('Master video not loaded yet.'),
-                      ),
-
-                    const SizedBox(height: 20),
-
-                    ElevatedButton(
-                      onPressed: isPreparing ? null : prepareProtocolFiles,
-                      child: isPreparing
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              isPrepared
-                                  ? 'Reload video protocol files'
-                                  : 'Prepare video protocol raw files',
-                            ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    if (isPrepared)
-                      ElevatedButton(
-                        onPressed: isPlaying ? pauseVideo : playVideo,
-                        child: Text(
-                          isPlaying
-                              ? 'Pause video'
-                              : 'Play master protocol video',
-                        ),
-                      ),
-                    if (playbackCompleted)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (BuildContext context) {
-                                  return BubbleGameScreen(
-                                    sessionDir: widget.sessionDir,
-                                    childInfo: widget.childInfo,
-                                  );
-                                },
-                              ),
-                            );
-                          },
-                          child: const Text('Continue to bubble game'),
-                        ),
-                      ),
-
-                    const SizedBox(height: 20),
-
-                    SelectableText(status),
-                  ],
-                ),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        await exitLandscapeFullscreen();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child:
+                    videoController == null ||
+                        !videoController.value.isInitialized
+                    ? buildPreparationView()
+                    : buildVideoView(videoController),
               ),
+
+              if (activeParentCue.isNotEmpty)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: buildParentCueOverlay(),
+                ),
+
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: buildBottomControls(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildPreparationView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.play_circle_outline,
+              color: Colors.white,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Video Session',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Keep the child facing the screen.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 17),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: isPreparing ? null : prepareProtocolFiles,
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text(isPreparing ? 'Preparing...' : 'Prepare'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget buildVideoView(VideoPlayerController videoController) {
+    final Size videoSize = videoController.value.size;
+
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: videoSize.width,
+          height: videoSize.height,
+          child: VideoPlayer(videoController),
+        ),
+      ),
+    );
+  }
+
+  Widget buildParentCueOverlay() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          activeParentCue,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildBottomControls() {
+    if (playbackCompleted) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          FilledButton.icon(
+            onPressed: goToBubbleGame,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text('Continue'),
+          ),
+        ],
+      );
+    }
+
+    if (!isPrepared) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        FilledButton.icon(
+          onPressed: isPlaying ? null : playVideo,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Start'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> goToBubbleGame() async {
+    await exitLandscapeFullscreen();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (BuildContext context) {
+          return BubbleGameScreen(
+            sessionDir: widget.sessionDir,
+            childInfo: widget.childInfo,
+          );
+        },
       ),
     );
   }

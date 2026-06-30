@@ -600,7 +600,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
         : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Gaze Calibration')),
+      appBar: AppBar(title: const Text('Look and Follow')),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
@@ -616,7 +616,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Text(
-                            'Gaze Calibration',
+                            'Look and Follow',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 28,
@@ -625,7 +625,7 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
                           ),
                           const SizedBox(height: 16),
                           const Text(
-                            'Look at each dot until it moves. Keep your face visible to the camera.',
+                            'Look at each dot until it moves.',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 18),
                           ),
@@ -633,15 +633,23 @@ class _GazeCalibrationScreenState extends State<GazeCalibrationScreen> {
                           if (!isRunning && !isFinished)
                             ElevatedButton(
                               onPressed: startCalibration,
-                              child: const Text('Start calibration'),
+                              child: const Text('Start'),
                             ),
                           if (isFinished)
                             ElevatedButton(
                               onPressed: goToVideoProtocol,
-                              child: const Text('Continue to video protocol'),
+                              child: const Text('Continue'),
                             ),
                           const SizedBox(height: 20),
-                          SelectableText(status, textAlign: TextAlign.center),
+                          if (!isFinished)
+                            Text(
+                              isRunning ? 'Follow the dot' : 'Ready',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black54,
+                              ),
+                            ),
                         ],
                       ),
                     ),
