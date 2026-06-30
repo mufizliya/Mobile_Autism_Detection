@@ -133,9 +133,9 @@ class PaperPhenotypeMapper {
         allSocialLikeStimuli,
         _facingForwardRatio,
       ),
-      source: 'mobile_framewise_csv_proxy',
+      source: 'mobile_mlkit_head_pose_orientation',
       note:
-          'Proxy for paper feature. Computed as proportion of face-detected frames with modest yaw/pitch during social/mixed/speech stimuli.',
+          'Close mobile proxy for paper feature. Computed as proportion of face-detected frames with modest yaw, pitch, and roll during social/mixed/speech stimuli.',
     );
 
     setFeature(
@@ -145,9 +145,9 @@ class PaperPhenotypeMapper {
         allNonsocialLikeStimuli,
         _facingForwardRatio,
       ),
-      source: 'mobile_framewise_csv_proxy',
+      source: 'mobile_mlkit_head_pose_orientation',
       note:
-          'Proxy for paper feature. Computed as proportion of face-detected frames with modest yaw/pitch during nonsocial/mixed stimuli.',
+          'Close mobile proxy for paper feature. Computed as proportion of face-detected frames with modest yaw, pitch, and roll during nonsocial/mixed stimuli.',
     );
 
     setFeature(
@@ -194,17 +194,17 @@ class PaperPhenotypeMapper {
     setFeature(
       name: PaperFeatureNames.responseToNameDelaySec,
       value: responseToName['mean_delay_sec'],
-      source: 'mobile_head_movement_after_name_call_proxy',
+      source: 'mobile_head_pose_angular_response_proxy',
       note:
-          'Proxy only. Estimated from first post-name-call head movement response in framewise logs.',
+          'Close mobile proxy. Estimated from first post-name-call head-pose angular movement response in framewise logs.',
     );
 
     setFeature(
       name: PaperFeatureNames.responseToNameProportion,
       value: responseToName['response_proportion'],
-      source: 'mobile_head_movement_after_name_call_proxy',
+      source: 'mobile_head_pose_angular_response_proxy',
       note:
-          'Proxy only. Proportion of name calls with post-call head movement response.',
+          'Close mobile proxy. Proportion of name calls with post-call head-pose angular movement response.',
     );
 
     setFeature(
@@ -238,9 +238,9 @@ class PaperPhenotypeMapper {
         allSocialLikeStimuli,
         (List<Map<String, String>> rows) => _meanColumn(rows, 'head_movement'),
       ),
-      source: 'mobile_face_center_motion_proxy',
+      source: 'mobile_mlkit_head_pose_angular_dynamics',
       note:
-          'Proxy for paper head movement. Uses face bounding-box center movement between frames.',
+          'Close mobile proxy for paper head movement. Uses frame-to-frame yaw/pitch/roll angular velocity in degrees per second.',
     );
 
     setFeature(
@@ -250,9 +250,9 @@ class PaperPhenotypeMapper {
         allNonsocialLikeStimuli,
         (List<Map<String, String>> rows) => _meanColumn(rows, 'head_movement'),
       ),
-      source: 'mobile_face_center_motion_proxy',
+      source: 'mobile_mlkit_head_pose_angular_dynamics',
       note:
-          'Proxy for paper head movement. Uses face bounding-box center movement between frames.',
+          'Close mobile proxy for paper head movement. Uses frame-to-frame yaw/pitch/roll angular velocity in degrees per second.',
     );
 
     setFeature(
@@ -262,9 +262,9 @@ class PaperPhenotypeMapper {
         allSocialLikeStimuli,
         (List<Map<String, String>> rows) => _stdColumn(rows, 'head_movement'),
       ),
-      source: 'mobile_face_center_motion_proxy',
+      source: 'mobile_mlkit_head_pose_angular_dynamics',
       note:
-          'Proxy complexity. Uses standard deviation of frame-to-frame head movement.',
+          'Close mobile proxy for paper head movement complexity. Uses standard deviation of head-pose angular velocity.',
     );
 
     setFeature(
@@ -274,9 +274,9 @@ class PaperPhenotypeMapper {
         allNonsocialLikeStimuli,
         (List<Map<String, String>> rows) => _stdColumn(rows, 'head_movement'),
       ),
-      source: 'mobile_face_center_motion_proxy',
+      source: 'mobile_mlkit_head_pose_angular_dynamics',
       note:
-          'Proxy complexity. Uses standard deviation of frame-to-frame head movement.',
+          'Close mobile proxy for paper head movement complexity. Uses standard deviation of head-pose angular velocity.',
     );
 
     setFeature(
@@ -287,8 +287,9 @@ class PaperPhenotypeMapper {
         (List<Map<String, String>> rows) =>
             _meanColumn(rows, 'head_acceleration'),
       ),
-      source: 'mobile_face_center_motion_proxy',
-      note: 'Proxy acceleration. Uses change in frame-to-frame head movement.',
+      source: 'mobile_mlkit_head_pose_angular_dynamics',
+      note:
+          'Close mobile proxy for paper head movement acceleration. Uses frame-to-frame change in head-pose angular velocity.',
     );
 
     setFeature(
@@ -299,8 +300,9 @@ class PaperPhenotypeMapper {
         (List<Map<String, String>> rows) =>
             _meanColumn(rows, 'head_acceleration'),
       ),
-      source: 'mobile_face_center_motion_proxy',
-      note: 'Proxy acceleration. Uses change in frame-to-frame head movement.',
+      source: 'mobile_mlkit_head_pose_angular_dynamics',
+      note:
+          'Close mobile proxy for paper head movement acceleration. Uses frame-to-frame change in head-pose angular velocity.',
     );
 
     setFeature(
@@ -625,14 +627,15 @@ class PaperPhenotypeMapper {
 
       final double? yaw = _toNullableDouble(row['yaw_proxy']);
       final double? pitch = _toNullableDouble(row['pitch_proxy']);
+      final double? roll = _toNullableDouble(row['roll_proxy_deg']);
 
-      if (yaw == null || pitch == null) {
+      if (yaw == null || pitch == null || roll == null) {
         continue;
       }
 
       valid += 1;
 
-      if (yaw.abs() <= 20.0 && pitch.abs() <= 20.0) {
+      if (yaw.abs() <= 15.0 && pitch.abs() <= 15.0 && roll.abs() <= 20.0) {
         facingForward += 1;
       }
     }
@@ -748,7 +751,7 @@ class PaperPhenotypeMapper {
       'responded_count': delays.length,
       'total_name_calls': total,
       'proxy_rule':
-          'First frame within 4 sec after call where head_movement >= 5 px.',
+          'First frame within 4 sec after call where head-pose angular velocity >= 5 deg/sec.',
     };
   }
 

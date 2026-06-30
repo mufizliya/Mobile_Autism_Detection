@@ -154,9 +154,11 @@ class FramewiseLogExporter {
     final Map<int, Map<String, dynamic>> calibratedGazeByFrameIndex =
         _calibratedGazeByFrameIndex(calibratedGazePayload);
 
-    double? previousCenterX;
-    double? previousCenterY;
-    double? previousMovement;
+    double? previousYaw;
+    double? previousPitch;
+    double? previousRoll;
+    double? previousElapsedTimeSec;
+    double? previousAngularVelocity;
 
     for (final Map<String, dynamic> frame in frames) {
       final bool faceDetected = frame['face_detected'] == true;
@@ -193,31 +195,42 @@ class FramewiseLogExporter {
           ? null
           : _nullableNumber(box['center_y']);
 
+      final double? yaw = _nullableNumber(frame['head_yaw']);
+      final double? pitch = _nullableNumber(frame['head_pitch']);
+      final double? roll = _nullableNumber(frame['head_roll']);
+
       double? headMovement;
-
-      if (centerX != null &&
-          centerY != null &&
-          previousCenterX != null &&
-          previousCenterY != null) {
-        final double dx = centerX - previousCenterX;
-        final double dy = centerY - previousCenterY;
-
-        headMovement = sqrt((dx * dx) + (dy * dy));
-      }
-
       double? headAcceleration;
 
-      if (headMovement != null && previousMovement != null) {
-        headAcceleration = (headMovement - previousMovement).abs();
-      }
+      if (faceDetected && yaw != null && pitch != null && roll != null) {
+        if (previousYaw != null &&
+            previousPitch != null &&
+            previousRoll != null &&
+            previousElapsedTimeSec != null) {
+          final double dt = elapsedTimeSec - previousElapsedTimeSec;
 
-      if (centerX != null && centerY != null) {
-        previousCenterX = centerX;
-        previousCenterY = centerY;
-      }
+          if (dt > 0) {
+            final double dYaw = yaw - previousYaw;
+            final double dPitch = pitch - previousPitch;
+            final double dRoll = roll - previousRoll;
 
-      if (headMovement != null) {
-        previousMovement = headMovement;
+            headMovement = sqrt(
+              (dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll),
+            ) / dt;
+
+            if (previousAngularVelocity != null) {
+              headAcceleration =
+                  (headMovement - previousAngularVelocity).abs() / dt;
+            }
+
+            previousAngularVelocity = headMovement;
+          }
+        }
+
+        previousYaw = yaw;
+        previousPitch = pitch;
+        previousRoll = roll;
+        previousElapsedTimeSec = elapsedTimeSec;
       }
 
       final double? smiling = _nullableNumber(frame['smiling_probability']);
@@ -253,9 +266,9 @@ class FramewiseLogExporter {
         _roundNullable(calibratedGazeY),
         calibratedGazeValid,
         calibratedGazeValid ? 'mobile_iris_landmark_calibrated_gaze' : '',
-        _roundNullable(_nullableNumber(frame['head_yaw'])),
-        _roundNullable(_nullableNumber(frame['head_pitch'])),
-        _roundNullable(_nullableNumber(frame['head_roll'])),
+        _roundNullable(yaw),
+        _roundNullable(pitch),
+        _roundNullable(roll),
         _roundNullable(centerX),
         _roundNullable(centerY),
         _roundNullable(headMovement),
@@ -327,6 +340,8 @@ class FramewiseLogExporter {
         .whereType<double>()
         .toList();
 
+    final Map<String, dynamic> headDynamics = _headAngularDynamicsSummary(frames);
+
     final List<double> mouthOpenValues = frames
         .map(
           (Map<String, dynamic> frame) =>
@@ -362,6 +377,13 @@ class FramewiseLogExporter {
       'mean_yaw_proxy': _round4(_mean(yawValues)),
       'mean_pitch_proxy': _round4(_mean(pitchValues)),
       'mean_roll_proxy_deg': _round4(_mean(rollValues)),
+      'head_movement_source': 'head_pose_angular_velocity_deg_per_sec',
+      'mean_head_angular_velocity_deg_per_sec':
+          headDynamics['mean_velocity_deg_per_sec'],
+      'head_angular_velocity_complexity_std':
+          headDynamics['velocity_complexity_std'],
+      'mean_head_angular_acceleration_deg_per_sec2':
+          headDynamics['mean_acceleration_deg_per_sec2'],
       'mouth_open_proxy_mean': _round4(_mean(mouthOpenValues)),
       'mouth_complexity_proxy': _round4(_std(mouthOpenValues)),
       'eyebrow_signal_mean': eyebrowSignalValues.isEmpty
@@ -370,7 +392,79 @@ class FramewiseLogExporter {
       'eyebrow_complexity_proxy': eyebrowSignalValues.length <= 1
           ? null
           : _round4(_std(eyebrowSignalValues)),
-      'measurement_source': 'mobile_native_mlkit_contour_proxy_to_python_csv',
+      'measurement_source': 'mobile_native_mlkit_mediapipe_head_pose_contour_to_python_csv',
+    };
+  }
+
+  static Map<String, dynamic> _headAngularDynamicsSummary(
+    List<Map<String, dynamic>> frames,
+  ) {
+    final List<double> velocities = [];
+    final List<double> accelerations = [];
+
+    double? previousYaw;
+    double? previousPitch;
+    double? previousRoll;
+    double? previousTimeSec;
+    double? previousVelocity;
+
+    for (final Map<String, dynamic> frame in frames) {
+      if (frame['face_detected'] != true) {
+        continue;
+      }
+
+      final double? yaw = _nullableNumber(frame['head_yaw']);
+      final double? pitch = _nullableNumber(frame['head_pitch']);
+      final double? roll = _nullableNumber(frame['head_roll']);
+      final double timeSec = _number(frame['time_ms']) / 1000.0;
+
+      if (yaw == null || pitch == null || roll == null) {
+        continue;
+      }
+
+      if (previousYaw != null &&
+          previousPitch != null &&
+          previousRoll != null &&
+          previousTimeSec != null) {
+        final double dt = timeSec - previousTimeSec;
+
+        if (dt > 0) {
+          final double dYaw = yaw - previousYaw;
+          final double dPitch = pitch - previousPitch;
+          final double dRoll = roll - previousRoll;
+
+          final double velocity = sqrt(
+            (dYaw * dYaw) + (dPitch * dPitch) + (dRoll * dRoll),
+          ) / dt;
+
+          velocities.add(velocity);
+
+          if (previousVelocity != null) {
+            accelerations.add((velocity - previousVelocity).abs() / dt);
+          }
+
+          previousVelocity = velocity;
+        }
+      }
+
+      previousYaw = yaw;
+      previousPitch = pitch;
+      previousRoll = roll;
+      previousTimeSec = timeSec;
+    }
+
+    return {
+      'mean_velocity_deg_per_sec': velocities.isEmpty
+          ? null
+          : _round4(_mean(velocities)),
+      'velocity_complexity_std': velocities.length <= 1
+          ? null
+          : _round4(_std(velocities)),
+      'mean_acceleration_deg_per_sec2': accelerations.isEmpty
+          ? null
+          : _round4(_mean(accelerations)),
+      'valid_velocity_sample_count': velocities.length,
+      'valid_acceleration_sample_count': accelerations.length,
     };
   }
 

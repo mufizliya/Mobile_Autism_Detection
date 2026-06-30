@@ -575,7 +575,7 @@ class FeatureReliabilityBuilder {
       'source': source,
       'confidence': confidence,
       'reason': reason,
-      if (evidence != null) 'evidence': evidence,
+      'evidence': ?evidence,
     };
   }
 
