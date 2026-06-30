@@ -147,7 +147,7 @@ class FeatureReliabilityBuilder {
         'source': source,
         'confidence': 'medium',
         'reason':
-            'Computed using calibrated MediaPipe iris landmarks mapped to screen AOIs. This is closer to gaze estimation than head-pose proxy, but not clinical eye-tracking hardware.',
+            'Computed using calibrated MediaPipe iris landmarks from a unified native recorder and mapped to screen AOIs. If vertical clipping is high, gaze_y is stabilized using within-session percentile normalization. This is closer to gaze estimation than head-pose proxy, but not clinical eye-tracking hardware.',
       };
     }
 
