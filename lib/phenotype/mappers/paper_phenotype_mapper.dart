@@ -218,9 +218,9 @@ class PaperPhenotypeMapper {
         allSocialLikeStimuli,
         'blink_rate_per_min_event',
       ),
-      source: 'mobile_eye_open_probability_event_detection',
+      source: 'mobile_mediapipe_ear_blink_event_detection',
       note:
-          'Close mobile proxy. Blink rate from ML Kit eye-open probability events using closed/open hysteresis thresholds and valid blink-duration filtering during social/mixed/speech stimuli.',
+          'Close mobile proxy. Blink rate from MediaPipe eyelid eye-aspect-ratio events when available, with ML Kit eye-open probability fallback during social/mixed/speech stimuli.',
     );
 
     setFeature(
@@ -230,9 +230,9 @@ class PaperPhenotypeMapper {
         allNonsocialLikeStimuli,
         'blink_rate_per_min_event',
       ),
-      source: 'mobile_eye_open_probability_event_detection',
+      source: 'mobile_mediapipe_ear_blink_event_detection',
       note:
-          'Close mobile proxy. Blink rate from ML Kit eye-open probability events using closed/open hysteresis thresholds and valid blink-duration filtering during nonsocial/mixed stimuli.',
+          'Close mobile proxy. Blink rate from MediaPipe eyelid eye-aspect-ratio events when available, with ML Kit eye-open probability fallback during nonsocial/mixed stimuli.',
     );
 
     setFeature(
@@ -722,8 +722,18 @@ class PaperPhenotypeMapper {
     int totalSpeechFrameCount = 0;
     int validSpeechGazeFrameCount = 0;
     int speakerAoiAttentionFrameCount = 0;
+    int offSpeakerAoiAttentionFrameCount = 0;
+    int turnTakingWindowCount = 0;
+    int turnTakingValidGazeFrameCount = 0;
+    int turnTakingSpeakerAoiAttentionFrameCount = 0;
+    int turnTakingOffSpeakerAoiAttentionFrameCount = 0;
+    int turnTakingHorizontalSpeakerZoneFrameCount = 0;
+    int turnTakingHorizontalOffSpeakerZoneFrameCount = 0;
 
     final List<double> windowAttentionRatios = [];
+    final List<double> turnTakingAttentionRatios = [];
+    final List<double> speakerSelectivityScores = [];
+    final List<double> horizontalSpeakerSelectivityScores = [];
 
     for (final String stimulusId in stimulusIds) {
       final Map<String, dynamic>? stimulus = stimulusById[stimulusId];
@@ -768,6 +778,22 @@ class PaperPhenotypeMapper {
             _intFromDynamic(result['valid_gaze_frame_count']);
         speakerAoiAttentionFrameCount +=
             _intFromDynamic(result['speaker_aoi_attention_frame_count']);
+        offSpeakerAoiAttentionFrameCount +=
+            _intFromDynamic(result['off_speaker_aoi_attention_frame_count']);
+
+        if (result['is_turn_taking_window'] == true) {
+          turnTakingWindowCount += 1;
+          turnTakingValidGazeFrameCount +=
+              _intFromDynamic(result['valid_gaze_frame_count']);
+          turnTakingSpeakerAoiAttentionFrameCount +=
+              _intFromDynamic(result['speaker_aoi_attention_frame_count']);
+          turnTakingOffSpeakerAoiAttentionFrameCount +=
+              _intFromDynamic(result['off_speaker_aoi_attention_frame_count']);
+          turnTakingHorizontalSpeakerZoneFrameCount +=
+              _intFromDynamic(result['horizontal_speaker_zone_frame_count']);
+          turnTakingHorizontalOffSpeakerZoneFrameCount +=
+              _intFromDynamic(result['horizontal_off_speaker_zone_frame_count']);
+        }
 
         if (result['usable'] == true) {
           usableSpeechWindowCount += 1;
@@ -776,6 +802,23 @@ class PaperPhenotypeMapper {
           );
           if (ratio != null) {
             windowAttentionRatios.add(ratio);
+            if (result['is_turn_taking_window'] == true) {
+              turnTakingAttentionRatios.add(ratio);
+            }
+          }
+
+          final double? selectivity = _toNullableDouble(
+            result['speaker_selectivity_score'],
+          );
+          if (selectivity != null) {
+            speakerSelectivityScores.add(selectivity);
+          }
+
+          final double? horizontalSelectivity = _toNullableDouble(
+            result['horizontal_speaker_selectivity_score'],
+          );
+          if (horizontalSelectivity != null) {
+            horizontalSpeakerSelectivityScores.add(horizontalSelectivity);
           }
         }
 
@@ -810,6 +853,22 @@ class PaperPhenotypeMapper {
             _intFromDynamic(result['valid_gaze_frame_count']);
         speakerAoiAttentionFrameCount +=
             _intFromDynamic(result['speaker_aoi_attention_frame_count']);
+        offSpeakerAoiAttentionFrameCount +=
+            _intFromDynamic(result['off_speaker_aoi_attention_frame_count']);
+
+        if (result['is_turn_taking_window'] == true) {
+          turnTakingWindowCount += 1;
+          turnTakingValidGazeFrameCount +=
+              _intFromDynamic(result['valid_gaze_frame_count']);
+          turnTakingSpeakerAoiAttentionFrameCount +=
+              _intFromDynamic(result['speaker_aoi_attention_frame_count']);
+          turnTakingOffSpeakerAoiAttentionFrameCount +=
+              _intFromDynamic(result['off_speaker_aoi_attention_frame_count']);
+          turnTakingHorizontalSpeakerZoneFrameCount +=
+              _intFromDynamic(result['horizontal_speaker_zone_frame_count']);
+          turnTakingHorizontalOffSpeakerZoneFrameCount +=
+              _intFromDynamic(result['horizontal_off_speaker_zone_frame_count']);
+        }
 
         if (result['usable'] == true) {
           usableSpeechWindowCount += 1;
@@ -818,6 +877,23 @@ class PaperPhenotypeMapper {
           );
           if (ratio != null) {
             windowAttentionRatios.add(ratio);
+            if (result['is_turn_taking_window'] == true) {
+              turnTakingAttentionRatios.add(ratio);
+            }
+          }
+
+          final double? selectivity = _toNullableDouble(
+            result['speaker_selectivity_score'],
+          );
+          if (selectivity != null) {
+            speakerSelectivityScores.add(selectivity);
+          }
+
+          final double? horizontalSelectivity = _toNullableDouble(
+            result['horizontal_speaker_selectivity_score'],
+          );
+          if (horizontalSelectivity != null) {
+            horizontalSpeakerSelectivityScores.add(horizontalSelectivity);
           }
         }
 
@@ -833,6 +909,55 @@ class PaperPhenotypeMapper {
         ? 0.0
         : validSpeechGazeFrameCount / totalSpeechFrameCount;
 
+    final double? turnTakingAttentionToSpeech =
+        turnTakingValidGazeFrameCount == 0
+            ? null
+            : _round4(
+                turnTakingSpeakerAoiAttentionFrameCount /
+                    turnTakingValidGazeFrameCount,
+              );
+
+    final double? turnTakingOffSpeakerAttention =
+        turnTakingValidGazeFrameCount == 0
+            ? null
+            : _round4(
+                turnTakingOffSpeakerAoiAttentionFrameCount /
+                    turnTakingValidGazeFrameCount,
+              );
+
+    final double? turnTakingSpeakerSelectivity =
+        turnTakingAttentionToSpeech == null ||
+                turnTakingOffSpeakerAttention == null
+            ? null
+            : _round4(
+                turnTakingAttentionToSpeech - turnTakingOffSpeakerAttention,
+              );
+
+    final double? turnTakingHorizontalSpeakerAttention =
+        turnTakingValidGazeFrameCount == 0
+            ? null
+            : _round4(
+                turnTakingHorizontalSpeakerZoneFrameCount /
+                    turnTakingValidGazeFrameCount,
+              );
+
+    final double? turnTakingHorizontalOffSpeakerAttention =
+        turnTakingValidGazeFrameCount == 0
+            ? null
+            : _round4(
+                turnTakingHorizontalOffSpeakerZoneFrameCount /
+                    turnTakingValidGazeFrameCount,
+              );
+
+    final double? turnTakingHorizontalSpeakerSelectivity =
+        turnTakingHorizontalSpeakerAttention == null ||
+                turnTakingHorizontalOffSpeakerAttention == null
+            ? null
+            : _round4(
+                turnTakingHorizontalSpeakerAttention -
+                    turnTakingHorizontalOffSpeakerAttention,
+              );
+
     return {
       'schema_version': 'mobile_attention_to_speech_features_v2',
       'attention_to_speech': attentionToSpeech,
@@ -844,12 +969,37 @@ class PaperPhenotypeMapper {
       'total_speech_frame_count': totalSpeechFrameCount,
       'valid_speech_gaze_frame_count': validSpeechGazeFrameCount,
       'speaker_aoi_attention_frame_count': speakerAoiAttentionFrameCount,
+      'off_speaker_aoi_attention_frame_count': offSpeakerAoiAttentionFrameCount,
       'speech_gaze_coverage_ratio': _round4(speechGazeCoverageRatio),
+      'turn_taking_window_count': turnTakingWindowCount,
+      'turn_taking_valid_gaze_frame_count': turnTakingValidGazeFrameCount,
+      'turn_taking_attention_to_speaker_aoi': turnTakingAttentionToSpeech,
+      'turn_taking_attention_to_off_speaker_aoi': turnTakingOffSpeakerAttention,
+      'turn_taking_speaker_selectivity_score': turnTakingSpeakerSelectivity,
+      'turn_taking_horizontal_attention_to_speaker_zone':
+          turnTakingHorizontalSpeakerAttention,
+      'turn_taking_horizontal_attention_to_off_speaker_zone':
+          turnTakingHorizontalOffSpeakerAttention,
+      'turn_taking_horizontal_speaker_selectivity_score':
+          turnTakingHorizontalSpeakerSelectivity,
+      'mean_turn_taking_window_attention_to_speaker_aoi':
+          turnTakingAttentionRatios.isEmpty
+              ? null
+              : _round4(_mean(turnTakingAttentionRatios)),
+      'mean_speaker_selectivity_score': speakerSelectivityScores.isEmpty
+          ? null
+          : _round4(_mean(speakerSelectivityScores)),
+      'mean_horizontal_speaker_selectivity_score':
+          horizontalSpeakerSelectivityScores.isEmpty
+              ? null
+              : _round4(_mean(horizontalSpeakerSelectivityScores)),
       'method': 'speaker_window_calibrated_gaze_to_speaker_aoi',
       'source': 'mobile_speaker_window_calibrated_gaze_aoi',
       'quality_rule': {
         'usable_window': 'A speech window is usable when it has at least one valid calibrated gaze frame and a speaker/social AOI.',
         'attention_to_speech': 'speaker_aoi_attention_frame_count / valid_speech_gaze_frame_count across annotated speaker windows.',
+        'turn_taking_selectivity': 'For left/right speaker-turn windows, also report attention to the non-speaker AOI and speaker-minus-non-speaker selectivity.',
+        'horizontal_turn_taking_selectivity': 'For controlled tests, left/right speaker zones are also compared using gaze_x only. This avoids losing evidence when gaze_y falls just outside strict AOI bounds.',
       },
       'events': windowEvidence,
     };
@@ -869,10 +1019,17 @@ class PaperPhenotypeMapper {
     final double globalWindowEndSec = globalStartSec + localEndSec;
 
     final Map<String, dynamic>? speakerAoi = _aoiMap(turn['aoi']) ?? fallbackAoi;
+    final Map<String, dynamic>? offSpeakerAoi = _oppositeSpeakerAoiForTurn(
+      speaker: turn['speaker']?.toString(),
+      speakerAoi: speakerAoi,
+    );
 
     int totalFrameCount = 0;
     int validGazeFrameCount = 0;
     int speakerAoiAttentionFrameCount = 0;
+    int offSpeakerAoiAttentionFrameCount = 0;
+    int horizontalSpeakerZoneFrameCount = 0;
+    int horizontalOffSpeakerZoneFrameCount = 0;
 
     final List<double> gazeXs = [];
     final List<double> gazeYs = [];
@@ -907,11 +1064,61 @@ class PaperPhenotypeMapper {
           _pointInsideAoi(x: gazeX, y: gazeY, aoi: speakerAoi)) {
         speakerAoiAttentionFrameCount += 1;
       }
+
+      if (offSpeakerAoi != null &&
+          _pointInsideAoi(x: gazeX, y: gazeY, aoi: offSpeakerAoi)) {
+        offSpeakerAoiAttentionFrameCount += 1;
+      }
+
+      final String speakerLabel = turn['speaker']?.toString().toLowerCase().trim() ?? '';
+      if (speakerLabel == 'left' || speakerLabel == 'right') {
+        final bool gazeInLeftZone = gazeX < 0.5;
+        final bool gazeMatchesSpeaker =
+            (speakerLabel == 'left' && gazeInLeftZone) ||
+            (speakerLabel == 'right' && !gazeInLeftZone);
+
+        if (gazeMatchesSpeaker) {
+          horizontalSpeakerZoneFrameCount += 1;
+        } else {
+          horizontalOffSpeakerZoneFrameCount += 1;
+        }
+      }
     }
 
     final double? attentionRatio = validGazeFrameCount == 0
         ? null
         : _round4(speakerAoiAttentionFrameCount / validGazeFrameCount);
+
+    final double? offSpeakerAttentionRatio =
+        offSpeakerAoi == null || validGazeFrameCount == 0
+            ? null
+            : _round4(
+                offSpeakerAoiAttentionFrameCount / validGazeFrameCount,
+              );
+
+    final double? speakerSelectivityScore =
+        attentionRatio == null || offSpeakerAttentionRatio == null
+            ? null
+            : _round4(attentionRatio - offSpeakerAttentionRatio);
+
+    final double? horizontalSpeakerZoneAttentionRatio =
+        offSpeakerAoi == null || validGazeFrameCount == 0
+            ? null
+            : _round4(horizontalSpeakerZoneFrameCount / validGazeFrameCount);
+
+    final double? horizontalOffSpeakerZoneAttentionRatio =
+        offSpeakerAoi == null || validGazeFrameCount == 0
+            ? null
+            : _round4(horizontalOffSpeakerZoneFrameCount / validGazeFrameCount);
+
+    final double? horizontalSpeakerSelectivityScore =
+        horizontalSpeakerZoneAttentionRatio == null ||
+                horizontalOffSpeakerZoneAttentionRatio == null
+            ? null
+            : _round4(
+                horizontalSpeakerZoneAttentionRatio -
+                    horizontalOffSpeakerZoneAttentionRatio,
+              );
 
     return {
       'stimulus_id': stimulusId,
@@ -923,16 +1130,66 @@ class PaperPhenotypeMapper {
       'global_end_sec': _round4(globalWindowEndSec),
       'has_speaker_aoi': speakerAoi != null,
       'speaker_aoi': speakerAoi,
+      'has_off_speaker_aoi': offSpeakerAoi != null,
+      'off_speaker_aoi': offSpeakerAoi,
+      'is_turn_taking_window': offSpeakerAoi != null,
       'total_frame_count': totalFrameCount,
       'valid_gaze_frame_count': validGazeFrameCount,
       'speaker_aoi_attention_frame_count': speakerAoiAttentionFrameCount,
+      'off_speaker_aoi_attention_frame_count': offSpeakerAoiAttentionFrameCount,
       'speaker_aoi_attention_ratio': attentionRatio,
+      'off_speaker_aoi_attention_ratio': offSpeakerAttentionRatio,
+      'speaker_selectivity_score': speakerSelectivityScore,
+      'horizontal_speaker_zone_frame_count': horizontalSpeakerZoneFrameCount,
+      'horizontal_off_speaker_zone_frame_count': horizontalOffSpeakerZoneFrameCount,
+      'horizontal_speaker_zone_attention_ratio': horizontalSpeakerZoneAttentionRatio,
+      'horizontal_off_speaker_zone_attention_ratio': horizontalOffSpeakerZoneAttentionRatio,
+      'horizontal_speaker_selectivity_score': horizontalSpeakerSelectivityScore,
       'mean_gaze_x': gazeXs.isEmpty ? null : _round4(_mean(gazeXs)),
       'mean_gaze_y': gazeYs.isEmpty ? null : _round4(_mean(gazeYs)),
       'usable': speakerAoi != null && validGazeFrameCount > 0,
       'note': speakerAoi == null
           ? 'No speaker/social AOI available for this speech window.'
-          : 'Computed from calibrated gaze inside annotated speaker AOI.',
+          : offSpeakerAoi == null
+              ? 'Computed from calibrated gaze inside annotated speaker AOI.'
+              : 'Computed from calibrated gaze inside annotated speaker AOI and compared with the opposite non-speaker AOI. Horizontal speaker-zone selectivity is also reported for turn-taking tests where vertical gaze may fall just outside strict AOI bounds.',
+    };
+  }
+
+
+  static Map<String, dynamic>? _oppositeSpeakerAoiForTurn({
+    required String? speaker,
+    required Map<String, dynamic>? speakerAoi,
+  }) {
+    if (speakerAoi == null || speaker == null) {
+      return null;
+    }
+
+    final String normalizedSpeaker = speaker.toLowerCase().trim();
+
+    if (normalizedSpeaker != 'left' && normalizedSpeaker != 'right') {
+      return null;
+    }
+
+    final double yMin = _toDouble(speakerAoi['y_min']);
+    final double yMax = _toDouble(speakerAoi['y_max']);
+
+    if (normalizedSpeaker == 'left') {
+      return {
+        'x_min': 0.5,
+        'y_min': yMin,
+        'x_max': 1.0,
+        'y_max': yMax,
+        'derived_from': 'opposite_of_left_speaker_aoi',
+      };
+    }
+
+    return {
+      'x_min': 0.0,
+      'y_min': yMin,
+      'x_max': 0.5,
+      'y_max': yMax,
+      'derived_from': 'opposite_of_right_speaker_aoi',
     };
   }
 
@@ -1296,7 +1553,7 @@ class PaperPhenotypeMapper {
           PaperFeatureNames.blinkRateNonsocialMovies,
         ],
         'improvement':
-            'Current blink rate is a sampled ML Kit eye-open probability proxy. For stronger blink values, increase eye-signal sampling or add offline/MediaPipe eyelid-landmark blink analysis.',
+            'Current blink rate uses MediaPipe eyelid eye-aspect-ratio event detection when available, with ML Kit eye-open probability fallback. For strongest dataset labels, validate against recorded video/offline blink review.',
       },
       {
         'area': 'touch_force',

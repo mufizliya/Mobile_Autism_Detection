@@ -165,21 +165,40 @@ class FramewiseLogExporter {
 
       final double elapsedTimeSec = _number(frame['time_ms']) / 1000.0;
 
-      final double? leftEye = _nullableNumber(
+      final double? leftMlkitEye = _nullableNumber(
         frame['left_eye_open_probability'],
       );
 
-      final double? rightEye = _nullableNumber(
+      final double? rightMlkitEye = _nullableNumber(
         frame['right_eye_open_probability'],
       );
 
-      final double? avgEye = leftEye == null || rightEye == null
+      final double? leftMediaPipeEar = _nullableNumber(
+        frame['left_mediapipe_ear'],
+      );
+
+      final double? rightMediaPipeEar = _nullableNumber(
+        frame['right_mediapipe_ear'],
+      );
+
+      final double? avgMediaPipeEar = _nullableNumber(
+        frame['average_mediapipe_ear'],
+      );
+
+      final double? avgMlkitEye = leftMlkitEye == null || rightMlkitEye == null
           ? null
-          : (leftEye + rightEye) / 2.0;
+          : (leftMlkitEye + rightMlkitEye) / 2.0;
 
-      final bool eyeOpen = avgEye == null ? false : avgEye >= 0.25;
+      final double? blinkSignal = avgMediaPipeEar ?? avgMlkitEye;
+      final bool usingMediaPipeEar = avgMediaPipeEar != null;
 
-      final String blinkState = avgEye == null
+      final bool eyeOpen = blinkSignal == null
+          ? false
+          : usingMediaPipeEar
+              ? blinkSignal >= 0.23
+              : blinkSignal >= 0.65;
+
+      final String blinkState = blinkSignal == null
           ? 'unknown'
           : eyeOpen
           ? 'open'
@@ -256,9 +275,9 @@ class FramewiseLogExporter {
         paperCategory,
         frame['frame_index'],
         faceDetected,
-        _roundNullable(leftEye),
-        _roundNullable(rightEye),
-        _roundNullable(avgEye),
+        _roundNullable(leftMediaPipeEar ?? leftMlkitEye),
+        _roundNullable(rightMediaPipeEar ?? rightMlkitEye),
+        _roundNullable(blinkSignal),
         eyeOpen,
         blinkState,
         _roundNullable(calibratedGazeX),
@@ -315,6 +334,14 @@ class FramewiseLogExporter {
 
           return (left + right) / 2.0;
         })
+        .whereType<double>()
+        .toList();
+
+    final List<double> mediaPipeEarValues = frames
+        .map(
+          (Map<String, dynamic> frame) =>
+              _nullableNumber(frame['average_mediapipe_ear']),
+        )
         .whereType<double>()
         .toList();
 
@@ -396,6 +423,11 @@ class FramewiseLogExporter {
           ? null
           : _round4(blinkRatePerMinEvent),
       'blink_event_detection': blinkEvents,
+      'blink_signal_source': blinkEvents['signal_source'],
+      'blink_estimated_sampling_fps': blinkEvents['estimated_sampling_fps'],
+      'mean_mediapipe_eye_aspect_ratio': mediaPipeEarValues.isEmpty
+          ? null
+          : _round4(_mean(mediaPipeEarValues)),
       'mean_eye_open_probability': _round4(_mean(avgEyes)),
       'mean_yaw_proxy': _round4(_mean(yawValues)),
       'mean_pitch_proxy': _round4(_mean(pitchValues)),
@@ -619,119 +651,298 @@ class FramewiseLogExporter {
     };
   }
 
+  static _BlinkSample? _blinkSampleFromFrame(Map<String, dynamic> frame) {
+    final double? averageMediaPipeEar = _nullableNumber(
+      frame['average_mediapipe_ear'],
+    );
+
+    if (averageMediaPipeEar != null) {
+      return _BlinkSample(
+        value: averageMediaPipeEar,
+        source: 'mediapipe_ear',
+      );
+    }
+
+    final double? left = _nullableNumber(frame['left_eye_open_probability']);
+    final double? right = _nullableNumber(frame['right_eye_open_probability']);
+
+    if (left == null || right == null) {
+      return null;
+    }
+
+    return _BlinkSample(
+      value: (left + right) / 2.0,
+      source: 'mlkit_eye_open_probability',
+    );
+  }
+
   static Map<String, dynamic> _detectBlinkEvents(
     List<Map<String, dynamic>> frames,
   ) {
-    const double closedThreshold = 0.35;
-    const double openThreshold = 0.65;
+    final List<_TimedBlinkSample> mediaPipeSamples = [];
+    final List<_TimedBlinkSample> mlkitSamples = [];
+    final List<double> allSampleIntervalsSec = [];
 
-    final List<Map<String, dynamic>> events = [];
-
-    bool inClosedCluster = false;
-    double? clusterStartSec;
-    double? lowestEyeOpenDuringBlink;
-    int closedSampleCount = 0;
-
-    int validEyeSampleCount = 0;
     double? previousValidTimeSec;
 
-    final List<double> sampleIntervalsSec = [];
-
     for (final Map<String, dynamic> frame in frames) {
-      final double? left = _nullableNumber(frame['left_eye_open_probability']);
-      final double? right = _nullableNumber(
-        frame['right_eye_open_probability'],
-      );
+      final double timeSec = _number(frame['time_ms']) / 1000.0;
+      final _BlinkSample? sample = _blinkSampleFromFrame(frame);
 
-      if (left == null || right == null) {
+      if (sample == null) {
         continue;
       }
-
-      final double eyeOpen = (left + right) / 2.0;
-      final double timeSec = _number(frame['time_ms']) / 1000.0;
 
       if (previousValidTimeSec != null) {
         final double interval = timeSec - previousValidTimeSec;
         if (interval > 0) {
-          sampleIntervalsSec.add(interval);
+          allSampleIntervalsSec.add(interval);
         }
       }
 
       previousValidTimeSec = timeSec;
-      validEyeSampleCount += 1;
 
-      final bool closed = eyeOpen <= closedThreshold;
-      final bool confidentlyOpen = eyeOpen >= openThreshold;
+      final _TimedBlinkSample timedSample = _TimedBlinkSample(
+        timeSec: timeSec,
+        value: sample.value,
+        source: sample.source,
+      );
 
-      if (closed) {
-        if (!inClosedCluster) {
-          inClosedCluster = true;
-          clusterStartSec = timeSec;
-          lowestEyeOpenDuringBlink = eyeOpen;
-          closedSampleCount = 1;
-        } else {
-          closedSampleCount += 1;
-
-          if (lowestEyeOpenDuringBlink == null ||
-              eyeOpen < lowestEyeOpenDuringBlink) {
-            lowestEyeOpenDuringBlink = eyeOpen;
-          }
-        }
-
-        continue;
+      if (sample.source == 'mediapipe_ear') {
+        mediaPipeSamples.add(timedSample);
+      } else {
+        mlkitSamples.add(timedSample);
       }
+    }
 
-      if (inClosedCluster && confidentlyOpen) {
-        final double startSec = clusterStartSec ?? timeSec;
-        final double endSec = timeSec;
+    final bool useMediaPipe = mediaPipeSamples.length >= 5;
+    final List<_TimedBlinkSample> samples = useMediaPipe
+        ? mediaPipeSamples
+        : mlkitSamples;
 
-        final double durationSec = max(0.0, endSec - startSec);
+    if (samples.isEmpty) {
+      return {
+        'method': 'adaptive_mediapipe_ear_valley_blink_detection',
+        'blink_count': 0,
+        'valid_eye_sample_count': 0,
+        'mediapipe_ear_sample_count': mediaPipeSamples.length,
+        'mlkit_eye_probability_sample_count': mlkitSamples.length,
+        'signal_source': 'none',
+        'estimated_sampling_fps': 0.0,
+        'mean_sample_interval_sec': 0.0,
+        'events': [],
+        'quality_note': 'No usable eye signal samples were available.',
+      };
+    }
 
-        // With sparse 2 FPS sampling, true blink duration cannot be measured
-        // accurately. So we count short closed clusters as sampled blink events.
-        final bool validSampledBlink =
-            closedSampleCount <= 2 && lowestEyeOpenDuringBlink != null;
-
-        if (validSampledBlink) {
-          events.add({
-            'start_time_sec': _round4(startSec),
-            'end_time_sec': _round4(endSec),
-            'duration_sec_sampled': _round4(durationSec),
-            'closed_sample_count': closedSampleCount,
-            'lowest_eye_open_probability': _round4(lowestEyeOpenDuringBlink),
-            'confidence_note':
-                'Sampled blink event from sparse framewise eye-open probability; exact blink duration is approximate.',
-          });
-        }
-
-        inClosedCluster = false;
-        clusterStartSec = null;
-        lowestEyeOpenDuringBlink = null;
-        closedSampleCount = 0;
+    final List<double> sampleIntervalsSec = [];
+    for (int i = 1; i < samples.length; i++) {
+      final double interval = samples[i].timeSec - samples[i - 1].timeSec;
+      if (interval > 0) {
+        sampleIntervalsSec.add(interval);
       }
     }
 
     final double meanSampleIntervalSec = sampleIntervalsSec.isEmpty
-        ? 0.0
+        ? (allSampleIntervalsSec.isEmpty ? 0.0 : _mean(allSampleIntervalsSec))
         : _mean(sampleIntervalsSec);
 
     final double estimatedSamplingFps = meanSampleIntervalSec <= 0
         ? 0.0
         : 1.0 / meanSampleIntervalSec;
 
+    final List<double> values = samples
+        .map((_TimedBlinkSample sample) => sample.value)
+        .toList();
+
+    final double medianValue = _percentile(values, 0.50);
+    final double p10Value = _percentile(values, 0.10);
+    final double p25Value = _percentile(values, 0.25);
+    final double p75Value = _percentile(values, 0.75);
+
+    final String signalSource = useMediaPipe
+        ? 'mediapipe_ear'
+        : 'mlkit_eye_open_probability';
+
+    final double closedThreshold = useMediaPipe
+        ? _clampDouble(medianValue * 0.72, 0.16, 0.32)
+        : _clampDouble(medianValue * 0.70, 0.25, 0.50);
+
+    final double openThreshold = useMediaPipe
+        ? _clampDouble(medianValue * 0.86, closedThreshold + 0.025, 0.42)
+        : _clampDouble(medianValue * 0.88, closedThreshold + 0.08, 0.78);
+
+    final double signalSpread = max(0.0, p75Value - p10Value);
+    final double minimumDropFromOpen = useMediaPipe
+        ? max(0.045, signalSpread * 0.22)
+        : max(0.10, signalSpread * 0.30);
+
+    final double valleyCandidateThreshold = useMediaPipe
+        ? max(closedThreshold, p25Value)
+        : max(closedThreshold, medianValue - minimumDropFromOpen);
+
+    final double minBlinkSeparationSec = estimatedSamplingFps >= 5.0
+        ? 0.42
+        : 0.65;
+
+    final int recoveryLookAroundSamples = estimatedSamplingFps >= 5.0 ? 3 : 2;
+    final double minimumRecovery = useMediaPipe ? 0.025 : 0.08;
+
+    final List<_BlinkCandidate> candidates = [];
+
+    for (int i = 0; i < samples.length; i++) {
+      final _TimedBlinkSample current = samples[i];
+      final double previousValue = i == 0 ? current.value : samples[i - 1].value;
+      final double nextValue = i == samples.length - 1
+          ? current.value
+          : samples[i + 1].value;
+
+      final bool localMinimum = current.value <= previousValue &&
+          current.value <= nextValue;
+
+      final double dropFromOpen = max(0.0, p75Value - current.value);
+      final bool lowEnough = current.value <= valleyCandidateThreshold ||
+          current.value <= closedThreshold ||
+          dropFromOpen >= minimumDropFromOpen;
+
+      if (!localMinimum || !lowEnough || dropFromOpen < minimumDropFromOpen) {
+        continue;
+      }
+
+      final int beforeStart = max(0, i - recoveryLookAroundSamples);
+      final int afterEnd = min(samples.length - 1, i + recoveryLookAroundSamples);
+
+      final double beforeMax = samples
+          .sublist(beforeStart, i + 1)
+          .map((_TimedBlinkSample sample) => sample.value)
+          .reduce(max);
+
+      final double afterMax = samples
+          .sublist(i, afterEnd + 1)
+          .map((_TimedBlinkSample sample) => sample.value)
+          .reduce(max);
+
+      final bool hasRecovery = max(beforeMax, afterMax) - current.value >=
+          minimumRecovery;
+
+      if (!hasRecovery) {
+        continue;
+      }
+
+      candidates.add(
+        _BlinkCandidate(
+          sampleIndex: i,
+          timeSec: current.timeSec,
+          lowestSignal: current.value,
+          dropFromOpen: dropFromOpen,
+          beforeRecoverySignal: beforeMax,
+          afterRecoverySignal: afterMax,
+        ),
+      );
+    }
+
+    final List<_BlinkCandidate> selected = [];
+
+    for (final _BlinkCandidate candidate in candidates) {
+      if (selected.isEmpty) {
+        selected.add(candidate);
+        continue;
+      }
+
+      final _BlinkCandidate previous = selected.last;
+      final double separation = candidate.timeSec - previous.timeSec;
+
+      if (separation < minBlinkSeparationSec) {
+        if (candidate.lowestSignal < previous.lowestSignal) {
+          selected[selected.length - 1] = candidate;
+        }
+        continue;
+      }
+
+      selected.add(candidate);
+    }
+
+    final List<Map<String, dynamic>> events = [];
+
+    for (int i = 0; i < selected.length; i++) {
+      final _BlinkCandidate candidate = selected[i];
+      final double startTimeSec = candidate.sampleIndex <= 0
+          ? candidate.timeSec
+          : samples[candidate.sampleIndex - 1].timeSec;
+      final double endTimeSec = candidate.sampleIndex >= samples.length - 1
+          ? candidate.timeSec
+          : samples[candidate.sampleIndex + 1].timeSec;
+
+      events.add({
+        'event_index': i + 1,
+        'valley_time_sec': _round4(candidate.timeSec),
+        'start_time_sec_sampled': _round4(startTimeSec),
+        'end_time_sec_sampled': _round4(endTimeSec),
+        'duration_sec_sampled': _round4(max(0.0, endTimeSec - startTimeSec)),
+        'lowest_blink_signal': _round4(candidate.lowestSignal),
+        'open_baseline_signal_p75': _round4(p75Value),
+        'drop_from_open_baseline': _round4(candidate.dropFromOpen),
+        'before_recovery_signal': _round4(candidate.beforeRecoverySignal),
+        'after_recovery_signal': _round4(candidate.afterRecoverySignal),
+        'signal_source': signalSource,
+        'confidence_note': signalSource == 'mediapipe_ear'
+            ? 'Blink event detected as an adaptive local-minimum valley in MediaPipe eyelid EAR.'
+            : 'Blink event detected as an adaptive local-minimum valley in ML Kit eye-open probability fallback.',
+      });
+    }
+
     return {
-      'method': 'sampled_hysteresis_eye_open_probability_event_detection',
+      'method': 'adaptive_mediapipe_ear_valley_blink_detection',
       'blink_count': events.length,
-      'valid_eye_sample_count': validEyeSampleCount,
+      'valid_eye_sample_count': samples.length,
+      'mediapipe_ear_sample_count': mediaPipeSamples.length,
+      'mlkit_eye_probability_sample_count': mlkitSamples.length,
+      'signal_source': signalSource,
       'estimated_sampling_fps': _round4(estimatedSamplingFps),
       'mean_sample_interval_sec': _round4(meanSampleIntervalSec),
-      'closed_threshold': closedThreshold,
-      'open_threshold': openThreshold,
+      'adaptive_thresholds': {
+        'median_signal': _round4(medianValue),
+        'p10_signal': _round4(p10Value),
+        'p25_signal': _round4(p25Value),
+        'p75_open_baseline_signal': _round4(p75Value),
+        'closed_threshold': _round4(closedThreshold),
+        'open_threshold': _round4(openThreshold),
+        'valley_candidate_threshold': _round4(valleyCandidateThreshold),
+        'minimum_drop_from_open_baseline': _round4(minimumDropFromOpen),
+        'minimum_recovery': _round4(minimumRecovery),
+        'minimum_blink_separation_sec': _round4(minBlinkSeparationSec),
+        'recovery_lookaround_samples': recoveryLookAroundSamples,
+      },
+      'candidate_count_before_separation_filter': candidates.length,
       'events': events,
-      'quality_note': estimatedSamplingFps < 8.0
-          ? 'Frame sampling is sparse for exact blink duration. Blink count is a sampled mobile proxy.'
-          : 'Frame sampling is sufficient for stronger blink event detection.',
+      'quality_note': signalSource == 'mediapipe_ear'
+          ? estimatedSamplingFps >= 5.0
+              ? 'MediaPipe EAR is available with usable mobile sampling. Blink events are detected as adaptive local-minimum valleys to handle repeated blinks inside low-EAR clusters.'
+              : 'MediaPipe EAR is available, but sampling is sparse. Blink count remains a mobile proxy.'
+          : 'MediaPipe EAR was unavailable; falling back to adaptive ML Kit eye-open probability proxy.',
     };
+  }
+
+  static double _percentile(List<double> values, double p) {
+    if (values.isEmpty) {
+      return 0.0;
+    }
+
+    final List<double> sorted = [...values]..sort();
+    final double rank = (sorted.length - 1) * p;
+    final int lower = rank.floor();
+    final int upper = rank.ceil();
+
+    if (lower == upper) {
+      return sorted[lower];
+    }
+
+    final double weight = rank - lower;
+    return sorted[lower] * (1.0 - weight) + sorted[upper] * weight;
+  }
+
+  static double _clampDouble(double value, double minValue, double maxValue) {
+    return max(minValue, min(maxValue, value));
   }
 
   static int _countBlinks(List<double> avgEyes) {
@@ -879,4 +1090,45 @@ class FramewiseLogExporter {
 
     return 0;
   }
+
+}
+
+class _TimedBlinkSample {
+  const _TimedBlinkSample({
+    required this.timeSec,
+    required this.value,
+    required this.source,
+  });
+
+  final double timeSec;
+  final double value;
+  final String source;
+}
+
+class _BlinkSample {
+  const _BlinkSample({
+    required this.value,
+    required this.source,
+  });
+
+  final double value;
+  final String source;
+}
+
+class _BlinkCandidate {
+  const _BlinkCandidate({
+    required this.sampleIndex,
+    required this.timeSec,
+    required this.lowestSignal,
+    required this.dropFromOpen,
+    required this.beforeRecoverySignal,
+    required this.afterRecoverySignal,
+  });
+
+  final int sampleIndex;
+  final double timeSec;
+  final double lowestSignal;
+  final double dropFromOpen;
+  final double beforeRecoverySignal;
+  final double afterRecoverySignal;
 }

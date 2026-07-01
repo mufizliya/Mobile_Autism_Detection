@@ -62,8 +62,8 @@ class NativeFaceRecorder(
     private var lastProcessedAtMs = 0L
     private var frameIndex = 0
 
-    private val processEveryMs = 500L
-    private val maxFrames = 600
+    private val processEveryMs = 200L
+    private val maxFrames = 1000
 
     private val frames = mutableListOf<JSONObject>()
 
@@ -376,6 +376,10 @@ class NativeFaceRecorder(
             json.put("right_iris_in_eye_x", JSONObject.NULL)
             json.put("average_iris_in_eye_x", JSONObject.NULL)
             json.put("iris_balance_abs_diff", JSONObject.NULL)
+            json.put("left_mediapipe_ear", JSONObject.NULL)
+            json.put("right_mediapipe_ear", JSONObject.NULL)
+            json.put("average_mediapipe_ear", JSONObject.NULL)
+            json.put("mediapipe_eye_open_signal", JSONObject.NULL)
             return json
         }
 
@@ -430,6 +434,27 @@ class NativeFaceRecorder(
             round4(abs(leftIrisInEyeX - rightIrisInEyeX))
         )
 
+        val leftEar = computeEyeAspectRatio(
+            landmarks = landmarks,
+            indices = listOf(33, 160, 158, 133, 153, 144)
+        )
+
+        val rightEar = computeEyeAspectRatio(
+            landmarks = landmarks,
+            indices = listOf(362, 385, 387, 263, 373, 380)
+        )
+
+        val averageEar = if (leftEar != null && rightEar != null) {
+            (leftEar + rightEar) / 2.0
+        } else {
+            null
+        }
+
+        json.put("left_mediapipe_ear", leftEar?.let { round4(it) } ?: JSONObject.NULL)
+        json.put("right_mediapipe_ear", rightEar?.let { round4(it) } ?: JSONObject.NULL)
+        json.put("average_mediapipe_ear", averageEar?.let { round4(it) } ?: JSONObject.NULL)
+        json.put("mediapipe_eye_open_signal", averageEar?.let { round4(it) } ?: JSONObject.NULL)
+
         return json
     }
 
@@ -446,11 +471,61 @@ class NativeFaceRecorder(
             "right_iris_in_eye_x",
             "average_iris_in_eye_x",
             "iris_balance_abs_diff",
+            "left_mediapipe_ear",
+            "right_mediapipe_ear",
+            "average_mediapipe_ear",
+            "mediapipe_eye_open_signal",
         )
 
         for (key in keysToCopy) {
             frameJson.put(key, irisSignals.opt(key) ?: JSONObject.NULL)
         }
+    }
+
+    private fun computeEyeAspectRatio(
+        landmarks: List<NormalizedLandmark>,
+        indices: List<Int>,
+    ): Double? {
+        if (indices.size != 6) {
+            return null
+        }
+
+        if (indices.any { it < 0 || it >= landmarks.size }) {
+            return null
+        }
+
+        val p1 = landmarks[indices[0]]
+        val p2 = landmarks[indices[1]]
+        val p3 = landmarks[indices[2]]
+        val p4 = landmarks[indices[3]]
+        val p5 = landmarks[indices[4]]
+        val p6 = landmarks[indices[5]]
+
+        val horizontal = landmarkDistance(p1, p4)
+
+        if (horizontal <= 0.000001) {
+            return null
+        }
+
+        val verticalA = landmarkDistance(p2, p6)
+        val verticalB = landmarkDistance(p3, p5)
+
+        return (verticalA + verticalB) / (2.0 * horizontal)
+    }
+
+    private fun landmarkDistance(
+        first: NormalizedLandmark,
+        second: NormalizedLandmark,
+    ): Double {
+        val dx = first.x() - second.x()
+        val dy = first.y() - second.y()
+        val dz = first.z() - second.z()
+
+        return sqrt(
+            dx.toDouble().pow(2.0) +
+                dy.toDouble().pow(2.0) +
+                dz.toDouble().pow(2.0)
+        )
     }
 
     private fun normalizeSafe(
@@ -717,9 +792,11 @@ class NativeFaceRecorder(
         summary.put("face_presence_ratio", facePresenceRatio)
         summary.put("iris_presence_ratio", irisPresenceRatio)
         summary.put("recording_source", "android_camerax_mlkit_and_mediapipe_front_camera")
+        summary.put("sample_interval_ms", processEveryMs)
+        summary.put("max_frames", maxFrames)
         summary.put(
             "measurement_note",
-            "Unified native recorder: ML Kit face/head/contour signals plus MediaPipe iris landmarks from one CameraX stream"
+            "Unified native recorder: ML Kit face/head/contour signals plus MediaPipe iris landmarks and MediaPipe eyelid EAR from one CameraX stream"
         )
 
         return summary

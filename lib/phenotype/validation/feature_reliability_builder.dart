@@ -310,6 +310,18 @@ class FeatureReliabilityBuilder {
       attentionToSpeechFeatures?['speech_gaze_coverage_ratio'],
     );
 
+    final int turnTakingWindowCount = _intNumber(
+      attentionToSpeechFeatures?['turn_taking_window_count'],
+    );
+
+    final int turnTakingValidGazeFrameCount = _intNumber(
+      attentionToSpeechFeatures?['turn_taking_valid_gaze_frame_count'],
+    );
+
+    final double turnTakingSpeakerSelectivityScore = _number(
+      attentionToSpeechFeatures?['turn_taking_speaker_selectivity_score'],
+    );
+
     final bool strongAttentionToSpeechQuality = strongFramewiseQuality &&
         strongGazeQuality &&
         attentionToSpeechFeatures != null &&
@@ -356,6 +368,10 @@ class FeatureReliabilityBuilder {
         'valid_speech_gaze_frame_count': validSpeechGazeFrameCount,
         'speaker_aoi_attention_frame_count': attentionFrameCount,
         'speech_gaze_coverage_ratio': round4(speechGazeCoverageRatio),
+        'turn_taking_window_count': turnTakingWindowCount,
+        'turn_taking_valid_gaze_frame_count': turnTakingValidGazeFrameCount,
+        'turn_taking_speaker_selectivity_score':
+            round4(turnTakingSpeakerSelectivityScore),
         'method': attentionToSpeechFeatures?['method']?.toString(),
         'strong_attention_to_speech_quality':
             strongAttentionToSpeechQuality,
@@ -557,7 +573,7 @@ class FeatureReliabilityBuilder {
         source: source,
         confidence: strongAttentionQuality ? 'high' : 'medium_high',
         reason: strongAttentionQuality
-            ? 'Computed from annotated speaker-turn windows using calibrated gaze-to-speaker-AOI frames. Framewise, gaze, and speech-window coverage quality gates passed.'
+            ? 'Computed from annotated speaker-turn windows using calibrated gaze-to-speaker-AOI frames. Framewise, gaze, and speech-window coverage quality gates passed. Turn-taking windows also report speaker-vs-non-speaker selectivity when available.'
             : 'Computed from speaker-window calibrated gaze evidence, but one or more attention-to-speech quality gates were not fully strong.',
         evidence: attentionQuality,
       );
@@ -577,16 +593,21 @@ class FeatureReliabilityBuilder {
       }
 
       final bool usesBlinkEvents = source.contains('event_detection');
+      final bool usesMediaPipeEar = source.contains('mediapipe_ear');
 
       return _result(
         status: usesBlinkEvents ? 'computed_close_proxy' : 'computed_proxy',
         source: source,
-        confidence: usesBlinkEvents && strongFramewiseQuality
+        confidence: usesMediaPipeEar && strongFramewiseQuality
+            ? 'medium_high'
+            : usesBlinkEvents && strongFramewiseQuality
             ? 'medium'
             : strongFramewiseQuality
             ? 'medium'
             : 'low',
-        reason: usesBlinkEvents
+        reason: usesMediaPipeEar
+            ? 'Computed from adaptive MediaPipe eyelid eye-aspect-ratio blink events with ML Kit fallback. Thresholds are personalized from the session eye signal, making this stronger than fixed-threshold eye-open probability, but still worth validating against video for dataset-quality blink labels.'
+            : usesBlinkEvents
             ? 'Computed from sampled ML Kit eye-open probability events. Current frame sampling is sparse for exact blink-duration measurement, so this remains a useful mobile proxy rather than a high-confidence blink signal.'
             : 'Computed from simple ML Kit eye-open probability transitions. Useful mobile proxy, but weaker than explicit blink-event detection.',
         evidence: qualityContext['framewise'],
@@ -773,7 +794,7 @@ class FeatureReliabilityBuilder {
           PaperFeatureNames.blinkRateNonsocialMovies,
         ],
         'recommendation':
-            'For stronger blink features, increase eye-signal sampling or add offline/MediaPipe eyelid-landmark blink analysis. Current blink values are sampled proxies.',
+            'For strongest blink labels, validate MediaPipe EAR blink events against recorded video/offline review. Current blink values are mobile-derived event proxies.',
       },
       {
         'priority': 3,
