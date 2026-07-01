@@ -50,6 +50,12 @@ class FeatureReliabilityBuilder {
       fileName: SessionFileNames.responseToNameFeatures,
     );
 
+    final Map<String, dynamic>? attentionToSpeechFeatures =
+        await SessionService.readJsonIfExists(
+      sessionDir: sessionDir,
+      fileName: SessionFileNames.attentionToSpeechFeatures,
+    );
+
     final Map<String, dynamic> values = paperAlignedFeatures?['values'] is Map
         ? Map<String, dynamic>.from(paperAlignedFeatures!['values'] as Map)
         : <String, dynamic>{};
@@ -72,6 +78,7 @@ class FeatureReliabilityBuilder {
       gazeCalibrationQuality: gazeCalibrationQuality,
       stimulusEvents: stimulusEvents,
       responseToNameFeatures: responseToNameFeatures,
+      attentionToSpeechFeatures: attentionToSpeechFeatures,
       gameMetrics: gameMetrics,
     );
 
@@ -177,6 +184,7 @@ class FeatureReliabilityBuilder {
     required Map<String, dynamic>? gazeCalibrationQuality,
     required Map<String, dynamic>? stimulusEvents,
     required Map<String, dynamic>? responseToNameFeatures,
+    required Map<String, dynamic>? attentionToSpeechFeatures,
     required Map<String, dynamic>? gameMetrics,
   }) {
     final Map<String, dynamic> frameSummary =
@@ -282,6 +290,34 @@ class FeatureReliabilityBuilder {
         responseEvents.length >= 3 &&
         (hasHeadEvidence || hasGazeShiftEvidence);
 
+    final int speechWindowCount = _intNumber(
+      attentionToSpeechFeatures?['speech_window_count'],
+    );
+
+    final int usableSpeechWindowCount = _intNumber(
+      attentionToSpeechFeatures?['usable_speech_window_count'],
+    );
+
+    final int validSpeechGazeFrameCount = _intNumber(
+      attentionToSpeechFeatures?['valid_speech_gaze_frame_count'],
+    );
+
+    final int attentionFrameCount = _intNumber(
+      attentionToSpeechFeatures?['speaker_aoi_attention_frame_count'],
+    );
+
+    final double speechGazeCoverageRatio = _number(
+      attentionToSpeechFeatures?['speech_gaze_coverage_ratio'],
+    );
+
+    final bool strongAttentionToSpeechQuality = strongFramewiseQuality &&
+        strongGazeQuality &&
+        attentionToSpeechFeatures != null &&
+        speechWindowCount >= 2 &&
+        usableSpeechWindowCount >= 2 &&
+        validSpeechGazeFrameCount >= 10 &&
+        speechGazeCoverageRatio >= 0.50;
+
     final bool bubbleGameCompleted =
         gameMetrics != null && _intNumber(gameMetrics['total_reactions']) > 0;
 
@@ -312,6 +348,17 @@ class FeatureReliabilityBuilder {
         'has_head_response_evidence': hasHeadEvidence,
         'has_gaze_shift_response_evidence': hasGazeShiftEvidence,
         'strong_response_to_name_quality': strongResponseToNameQuality,
+      },
+      'attention_to_speech': {
+        'feature_file_available': attentionToSpeechFeatures != null,
+        'speech_window_count': speechWindowCount,
+        'usable_speech_window_count': usableSpeechWindowCount,
+        'valid_speech_gaze_frame_count': validSpeechGazeFrameCount,
+        'speaker_aoi_attention_frame_count': attentionFrameCount,
+        'speech_gaze_coverage_ratio': round4(speechGazeCoverageRatio),
+        'method': attentionToSpeechFeatures?['method']?.toString(),
+        'strong_attention_to_speech_quality':
+            strongAttentionToSpeechQuality,
       },
       'bubble_game': {
         'completed': bubbleGameCompleted,
@@ -487,19 +534,32 @@ class FeatureReliabilityBuilder {
           status: 'missing_data_quality',
           source: source,
           confidence: 'medium',
-          reason: 'Attention-to-speech value is null for this session.',
-          evidence: qualityContext['framewise'],
+          reason:
+              'Attention-to-speech could not be computed because speech-window gaze evidence was insufficient.',
+          evidence: qualityContext['attention_to_speech'],
         );
       }
 
+      final Map<String, dynamic> attentionQuality =
+          qualityContext['attention_to_speech'] is Map
+              ? Map<String, dynamic>.from(
+                  qualityContext['attention_to_speech'] as Map,
+                )
+              : <String, dynamic>{};
+
+      final bool strongAttentionQuality =
+          attentionQuality['strong_attention_to_speech_quality'] == true;
+
       return _result(
-        status:
-            strongFramewiseQuality ? 'computed_proxy' : 'computed_proxy',
+        status: strongAttentionQuality
+            ? 'computed_close_proxy'
+            : 'computed_proxy',
         source: source,
-        confidence: strongFramewiseQuality ? 'medium' : 'low',
-        reason:
-            'Current implementation uses facing-forward ratio during speech/social stimuli. This remains a proxy until speaker-window plus calibrated gaze-to-speaking-AOI logic is implemented.',
-        evidence: qualityContext['framewise'],
+        confidence: strongAttentionQuality ? 'high' : 'medium_high',
+        reason: strongAttentionQuality
+            ? 'Computed from annotated speaker-turn windows using calibrated gaze-to-speaker-AOI frames. Framewise, gaze, and speech-window coverage quality gates passed.'
+            : 'Computed from speaker-window calibrated gaze evidence, but one or more attention-to-speech quality gates were not fully strong.',
+        evidence: attentionQuality,
       );
     }
 
@@ -700,10 +760,10 @@ class FeatureReliabilityBuilder {
     final List<Map<String, dynamic>> improvements = [
       {
         'priority': 1,
-        'area': 'attention_to_speech',
+        'area': 'attention_to_speech_validation',
         'features': [PaperFeatureNames.attentionToSpeech],
         'recommendation':
-            'Next: compute attention-to-speech from speaker windows plus calibrated gaze/social AOI instead of facing-forward ratio.',
+            'Attention-to-speech now uses speaker-window calibrated gaze. Next, validate speaker AOI annotations and gaze accuracy across multiple sessions.',
       },
       {
         'priority': 2,

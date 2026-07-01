@@ -174,16 +174,20 @@ class PaperPhenotypeMapper {
           'Computed from calibrated MediaPipe iris landmark gaze coordinates from the unified native recorder and social/nonsocial AOI assignment.',
     );
 
+    final Map<String, dynamic> attentionToSpeech =
+        _computeAttentionToSpeechFeatures(
+      csvRowsByStimulus: csvRowsByStimulus,
+      summariesByStimulus: summariesByStimulus,
+      stimulusById: stimulusById,
+      stimulusIds: speechStimuli,
+    );
+
     setFeature(
       name: PaperFeatureNames.attentionToSpeech,
-      value: _meanForStimuli(
-        csvRowsByStimulus,
-        speechStimuli,
-        _facingForwardRatio,
-      ),
-      source: 'mobile_framewise_csv_proxy',
+      value: attentionToSpeech['attention_to_speech'],
+      source: 'mobile_speaker_window_calibrated_gaze_aoi',
       note:
-          'Proxy only. Uses facing-forward ratio during speech/social stimuli. True paper feature requires gaze to speaking AOI during speech.',
+          'Close mobile proxy. Computed from annotated speaker-turn windows using calibrated gaze and speaker/social AOIs during speech stimuli.',
     );
 
     final Map<String, dynamic> responseToName = _computeResponseToNameProxy(
@@ -458,6 +462,12 @@ class PaperPhenotypeMapper {
 
     await SessionService.saveJson(
       sessionDir: sessionDir,
+      fileName: SessionFileNames.attentionToSpeechFeatures,
+      data: attentionToSpeech,
+    );
+
+    await SessionService.saveJson(
+      sessionDir: sessionDir,
       fileName: SessionFileNames.paperFeatureCoverage,
       data: coverage,
     );
@@ -697,6 +707,240 @@ class PaperPhenotypeMapper {
     }
 
     return _std(values);
+  }
+
+  static Map<String, dynamic> _computeAttentionToSpeechFeatures({
+    required Map<String, List<Map<String, String>>> csvRowsByStimulus,
+    required Map<String, Map<String, dynamic>> summariesByStimulus,
+    required Map<String, Map<String, dynamic>> stimulusById,
+    required List<String> stimulusIds,
+  }) {
+    final List<Map<String, dynamic>> windowEvidence = [];
+
+    int speechWindowCount = 0;
+    int usableSpeechWindowCount = 0;
+    int totalSpeechFrameCount = 0;
+    int validSpeechGazeFrameCount = 0;
+    int speakerAoiAttentionFrameCount = 0;
+
+    final List<double> windowAttentionRatios = [];
+
+    for (final String stimulusId in stimulusIds) {
+      final Map<String, dynamic>? stimulus = stimulusById[stimulusId];
+      final Map<String, dynamic>? summary = summariesByStimulus[stimulusId];
+      final List<Map<String, String>> rows = csvRowsByStimulus[stimulusId] ?? [];
+
+      if (stimulus == null || summary == null || rows.isEmpty) {
+        continue;
+      }
+
+      final double globalStartSec = _toDouble(summary['global_start_sec']);
+      final dynamic rawTurns = stimulus['speaker_turns'];
+
+      if (rawTurns is! List || rawTurns.isEmpty) {
+        final Map<String, dynamic>? socialAoi = _aoiMap(stimulus['social_aoi']);
+
+        if (socialAoi == null) {
+          continue;
+        }
+
+        final double durationSec = _toDouble(summary['duration_sec']);
+        final Map<String, dynamic> fallbackTurn = {
+          'speaker': stimulus['id']?.toString() ?? stimulusId,
+          'start_sec': 0.0,
+          'end_sec': durationSec,
+          'aoi': socialAoi,
+          'fallback': true,
+        };
+
+        final Map<String, dynamic> result = _attentionWindowEvidence(
+          stimulusId: stimulusId,
+          speakerIndex: 1,
+          turn: fallbackTurn,
+          globalStartSec: globalStartSec,
+          rows: rows,
+          fallbackAoi: socialAoi,
+        );
+
+        speechWindowCount += 1;
+        totalSpeechFrameCount += _intFromDynamic(result['total_frame_count']);
+        validSpeechGazeFrameCount +=
+            _intFromDynamic(result['valid_gaze_frame_count']);
+        speakerAoiAttentionFrameCount +=
+            _intFromDynamic(result['speaker_aoi_attention_frame_count']);
+
+        if (result['usable'] == true) {
+          usableSpeechWindowCount += 1;
+          final double? ratio = _toNullableDouble(
+            result['speaker_aoi_attention_ratio'],
+          );
+          if (ratio != null) {
+            windowAttentionRatios.add(ratio);
+          }
+        }
+
+        windowEvidence.add(result);
+        continue;
+      }
+
+      int speakerIndex = 0;
+
+      for (final dynamic rawTurn in rawTurns) {
+        if (rawTurn is! Map) {
+          continue;
+        }
+
+        speakerIndex += 1;
+        speechWindowCount += 1;
+
+        final Map<String, dynamic> turn = Map<String, dynamic>.from(rawTurn);
+        final Map<String, dynamic>? fallbackAoi = _aoiMap(stimulus['social_aoi']);
+
+        final Map<String, dynamic> result = _attentionWindowEvidence(
+          stimulusId: stimulusId,
+          speakerIndex: speakerIndex,
+          turn: turn,
+          globalStartSec: globalStartSec,
+          rows: rows,
+          fallbackAoi: fallbackAoi,
+        );
+
+        totalSpeechFrameCount += _intFromDynamic(result['total_frame_count']);
+        validSpeechGazeFrameCount +=
+            _intFromDynamic(result['valid_gaze_frame_count']);
+        speakerAoiAttentionFrameCount +=
+            _intFromDynamic(result['speaker_aoi_attention_frame_count']);
+
+        if (result['usable'] == true) {
+          usableSpeechWindowCount += 1;
+          final double? ratio = _toNullableDouble(
+            result['speaker_aoi_attention_ratio'],
+          );
+          if (ratio != null) {
+            windowAttentionRatios.add(ratio);
+          }
+        }
+
+        windowEvidence.add(result);
+      }
+    }
+
+    final double? attentionToSpeech = validSpeechGazeFrameCount == 0
+        ? null
+        : _round4(speakerAoiAttentionFrameCount / validSpeechGazeFrameCount);
+
+    final double speechGazeCoverageRatio = totalSpeechFrameCount == 0
+        ? 0.0
+        : validSpeechGazeFrameCount / totalSpeechFrameCount;
+
+    return {
+      'schema_version': 'mobile_attention_to_speech_features_v2',
+      'attention_to_speech': attentionToSpeech,
+      'mean_window_attention_to_speaker_aoi': windowAttentionRatios.isEmpty
+          ? null
+          : _round4(_mean(windowAttentionRatios)),
+      'speech_window_count': speechWindowCount,
+      'usable_speech_window_count': usableSpeechWindowCount,
+      'total_speech_frame_count': totalSpeechFrameCount,
+      'valid_speech_gaze_frame_count': validSpeechGazeFrameCount,
+      'speaker_aoi_attention_frame_count': speakerAoiAttentionFrameCount,
+      'speech_gaze_coverage_ratio': _round4(speechGazeCoverageRatio),
+      'method': 'speaker_window_calibrated_gaze_to_speaker_aoi',
+      'source': 'mobile_speaker_window_calibrated_gaze_aoi',
+      'quality_rule': {
+        'usable_window': 'A speech window is usable when it has at least one valid calibrated gaze frame and a speaker/social AOI.',
+        'attention_to_speech': 'speaker_aoi_attention_frame_count / valid_speech_gaze_frame_count across annotated speaker windows.',
+      },
+      'events': windowEvidence,
+    };
+  }
+
+  static Map<String, dynamic> _attentionWindowEvidence({
+    required String stimulusId,
+    required int speakerIndex,
+    required Map<String, dynamic> turn,
+    required double globalStartSec,
+    required List<Map<String, String>> rows,
+    required Map<String, dynamic>? fallbackAoi,
+  }) {
+    final double localStartSec = _toDouble(turn['start_sec']);
+    final double localEndSec = _toDouble(turn['end_sec']);
+    final double globalWindowStartSec = globalStartSec + localStartSec;
+    final double globalWindowEndSec = globalStartSec + localEndSec;
+
+    final Map<String, dynamic>? speakerAoi = _aoiMap(turn['aoi']) ?? fallbackAoi;
+
+    int totalFrameCount = 0;
+    int validGazeFrameCount = 0;
+    int speakerAoiAttentionFrameCount = 0;
+
+    final List<double> gazeXs = [];
+    final List<double> gazeYs = [];
+
+    for (final Map<String, String> row in rows) {
+      final double? elapsed = _toNullableDouble(row['elapsed_time']);
+
+      if (elapsed == null ||
+          elapsed < globalWindowStartSec ||
+          elapsed > globalWindowEndSec) {
+        continue;
+      }
+
+      totalFrameCount += 1;
+
+      if (row['gaze_valid'] != 'true') {
+        continue;
+      }
+
+      final double? gazeX = _toNullableDouble(row['gaze_x']);
+      final double? gazeY = _toNullableDouble(row['gaze_y']);
+
+      if (gazeX == null || gazeY == null) {
+        continue;
+      }
+
+      validGazeFrameCount += 1;
+      gazeXs.add(gazeX);
+      gazeYs.add(gazeY);
+
+      if (speakerAoi != null &&
+          _pointInsideAoi(x: gazeX, y: gazeY, aoi: speakerAoi)) {
+        speakerAoiAttentionFrameCount += 1;
+      }
+    }
+
+    final double? attentionRatio = validGazeFrameCount == 0
+        ? null
+        : _round4(speakerAoiAttentionFrameCount / validGazeFrameCount);
+
+    return {
+      'stimulus_id': stimulusId,
+      'speaker_index': speakerIndex,
+      'speaker': turn['speaker']?.toString() ?? 'unknown',
+      'local_start_sec': _round4(localStartSec),
+      'local_end_sec': _round4(localEndSec),
+      'global_start_sec': _round4(globalWindowStartSec),
+      'global_end_sec': _round4(globalWindowEndSec),
+      'has_speaker_aoi': speakerAoi != null,
+      'speaker_aoi': speakerAoi,
+      'total_frame_count': totalFrameCount,
+      'valid_gaze_frame_count': validGazeFrameCount,
+      'speaker_aoi_attention_frame_count': speakerAoiAttentionFrameCount,
+      'speaker_aoi_attention_ratio': attentionRatio,
+      'mean_gaze_x': gazeXs.isEmpty ? null : _round4(_mean(gazeXs)),
+      'mean_gaze_y': gazeYs.isEmpty ? null : _round4(_mean(gazeYs)),
+      'usable': speakerAoi != null && validGazeFrameCount > 0,
+      'note': speakerAoi == null
+          ? 'No speaker/social AOI available for this speech window.'
+          : 'Computed from calibrated gaze inside annotated speaker AOI.',
+    };
+  }
+
+  static int _intFromDynamic(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   static Map<String, dynamic> _computeResponseToNameProxy({
@@ -1036,40 +1280,35 @@ class PaperPhenotypeMapper {
   static List<Map<String, dynamic>> _tuningBacklog() {
     return [
       {
-        'area': 'true_gaze_features',
+        'area': 'gaze_validation',
         'needed_for': [
           PaperFeatureNames.gazePercentSocial,
           PaperFeatureNames.gazeSilhouetteScore,
           PaperFeatureNames.attentionToSpeech,
         ],
         'improvement':
-            'Current implementation uses calibrated MediaPipe iris landmarks mapped to stimulus AOIs. For stronger paper-faithfulness, validate gaze accuracy against known screen targets and improve calibration/modeling.',
+            'Current implementation uses calibrated MediaPipe iris landmarks mapped to stimulus AOIs and speaker AOIs. Next, validate gaze accuracy across multiple children/devices using known on-screen targets.',
       },
       {
-        'area': 'eyebrow_and_mouth_complexity',
+        'area': 'blink_detection',
         'needed_for': [
-          PaperFeatureNames.eyebrowComplexitySocialMovies,
-          PaperFeatureNames.eyebrowComplexityNonsocialMovies,
-          PaperFeatureNames.mouthComplexitySocialMovies,
-          PaperFeatureNames.mouthComplexityNonsocialMovies,
+          PaperFeatureNames.blinkRateSocialMovies,
+          PaperFeatureNames.blinkRateNonsocialMovies,
         ],
         'improvement':
-            'Enable face contours/landmarks or MediaPipe Face Mesh to compute landmark dynamics instead of smile-probability proxy.',
-      },
-      {
-        'area': 'response_to_name',
-        'needed_for': [
-          PaperFeatureNames.responseToNameDelaySec,
-          PaperFeatureNames.responseToNameProportion,
-        ],
-        'improvement':
-            'Record exact cue trigger wall-time during playback and compute orientation/attention change after each call.',
+            'Current blink rate is a sampled ML Kit eye-open probability proxy. For stronger blink values, increase eye-signal sampling or add offline/MediaPipe eyelid-landmark blink analysis.',
       },
       {
         'area': 'touch_force',
         'needed_for': [PaperFeatureNames.popTheBubblesAverageAppliedForce],
         'improvement':
-            'Use Listener with PointerDownEvent/PointerMoveEvent pressure, radiusMajor, radiusMinor, and device support checks to estimate touch force.',
+            'Use a device with reliable variable pressure support or keep this as a documented device limitation. Do not fabricate force values.',
+      },
+      {
+        'area': 'dataset_export',
+        'needed_for': PaperFeatureNames.all,
+        'improvement':
+            'Add a flat ml_dataset_row.json/csv with feature values, availability flags, confidence labels, and session-quality metadata.',
       },
     ];
   }

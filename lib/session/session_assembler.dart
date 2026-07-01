@@ -74,6 +74,12 @@ class SessionAssembler {
     final Map<String, dynamic> featureReliability =
         await FeatureReliabilityBuilder.buildAndSave(sessionDir: sessionDir);
 
+    final Map<String, dynamic>? attentionToSpeechFeatures =
+        await SessionService.readJsonIfExists(
+      sessionDir: sessionDir,
+      fileName: SessionFileNames.attentionToSpeechFeatures,
+    );
+
     final Map<String, dynamic> phenotypeVector = Map<String, dynamic>.from(
       phenotypeOutputs['phenotype_vector'] as Map,
     );
@@ -133,6 +139,11 @@ class SessionAssembler {
       SessionFileNames.paperAlignedFeatures: true,
       SessionFileNames.paperFeatureCoverage: true,
       SessionFileNames.featureReliability: true,
+      SessionFileNames.attentionToSpeechFeatures:
+          attentionToSpeechFeatures != null,
+      SessionFileNames.responseToNameFeatures: allFiles.contains(
+        SessionFileNames.responseToNameFeatures,
+      ),
       SessionFileNames.bubbleGameReactions: allFiles.contains(
         SessionFileNames.bubbleGameReactions,
       ),
@@ -183,6 +194,7 @@ class SessionAssembler {
         'session_quality_validation',
         if (gazeCalibration != null) 'gaze_calibration',
         if (calibratedGazeFrames != null) 'calibrated_iris_gaze',
+        if (attentionToSpeechFeatures != null) 'attention_to_speech_features',
         'feature_reliability_report',
       ],
       'files': files,
@@ -199,6 +211,21 @@ class SessionAssembler {
         'summary_files': framewiseSummaryFiles,
       },
       'game_metrics': gameMetrics,
+      'attention_to_speech_features': attentionToSpeechFeatures == null
+          ? null
+          : {
+              'attention_to_speech':
+                  attentionToSpeechFeatures['attention_to_speech'],
+              'speech_window_count':
+                  attentionToSpeechFeatures['speech_window_count'],
+              'usable_speech_window_count':
+                  attentionToSpeechFeatures['usable_speech_window_count'],
+              'valid_speech_gaze_frame_count':
+                  attentionToSpeechFeatures['valid_speech_gaze_frame_count'],
+              'speech_gaze_coverage_ratio':
+                  attentionToSpeechFeatures['speech_gaze_coverage_ratio'],
+              'method': attentionToSpeechFeatures['method'],
+            },
       'phenotype_calculation': {
         'status': 'paper_aligned_mapping_generated',
         'diagnosis_generated': false,
