@@ -41,6 +41,12 @@ class SessionFileNames {
   static const String finalSession = 'final_session.json';
   static const String sessionManifest = 'session_manifest.json';
 
+  // ML dataset export files
+
+  static const String mlDatasetRowJson = 'ml_dataset_row.json';
+  static const String mlDatasetRowCsv = 'ml_dataset_row.csv';
+  static const String mlDatasetSchema = 'ml_dataset_schema.json';
+
   static String framewiseLogCsv(String stimulusId) {
     return '${stimulusId}_framewise_log.csv';
   }

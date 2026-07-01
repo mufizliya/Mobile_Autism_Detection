@@ -5,6 +5,7 @@ import 'session_service.dart';
 import '../phenotype/mappers/paper_phenotype_mapper.dart';
 import '../phenotype/validation/session_quality_validator.dart';
 import '../phenotype/validation/feature_reliability_builder.dart';
+import '../phenotype/dataset/ml_dataset_exporter.dart';
 
 class SessionAssembler {
   static Future<Map<String, dynamic>> buildAndSave({
@@ -73,6 +74,9 @@ class SessionAssembler {
         await SessionQualityValidator.buildAndSave(sessionDir: sessionDir);
     final Map<String, dynamic> featureReliability =
         await FeatureReliabilityBuilder.buildAndSave(sessionDir: sessionDir);
+
+    final Map<String, dynamic> mlDatasetExport =
+        await MlDatasetExporter.buildAndSave(sessionDir: sessionDir);
 
     final Map<String, dynamic>? attentionToSpeechFeatures =
         await SessionService.readJsonIfExists(
@@ -147,6 +151,9 @@ class SessionAssembler {
       SessionFileNames.bubbleGameReactions: allFiles.contains(
         SessionFileNames.bubbleGameReactions,
       ),
+      SessionFileNames.mlDatasetRowJson: true,
+      SessionFileNames.mlDatasetRowCsv: true,
+      SessionFileNames.mlDatasetSchema: true,
     };
 
     final Map<String, dynamic> manifest = {
@@ -196,6 +203,7 @@ class SessionAssembler {
         if (calibratedGazeFrames != null) 'calibrated_iris_gaze',
         if (attentionToSpeechFeatures != null) 'attention_to_speech_features',
         'feature_reliability_report',
+        'ml_dataset_export',
       ],
       'files': files,
       'manifest_file': SessionFileNames.sessionManifest,
@@ -235,6 +243,13 @@ class SessionAssembler {
       'phenotype_vector': phenotypeVector,
       'paper_aligned_features': paperAlignedFeatures,
       'paper_feature_coverage': paperFeatureCoverage,
+      'ml_dataset_export': {
+        'json_file': SessionFileNames.mlDatasetRowJson,
+        'csv_file': SessionFileNames.mlDatasetRowCsv,
+        'schema_file': SessionFileNames.mlDatasetSchema,
+        'clinical_use_allowed': mlDatasetExport['clinical_use_allowed'],
+        'intended_use': mlDatasetExport['intended_use'],
+      },
     };
 
     await SessionService.saveJson(
