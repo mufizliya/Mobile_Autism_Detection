@@ -33,8 +33,7 @@ class SessionFileNames {
   static const String gazeCalibration = 'gaze_calibration.json';
 
   static const String gazeCalibrationQuality = 'gaze_calibration_quality.json';
-  static const String calibratedGazeFrames =
-    'calibrated_gaze_frames.json';
+  static const String calibratedGazeFrames = 'calibrated_gaze_frames.json';
 
   // Validation/final files
   static const String sessionQuality = 'session_quality.json';
@@ -42,10 +41,12 @@ class SessionFileNames {
   static const String sessionManifest = 'session_manifest.json';
 
   // ML dataset export files
-
   static const String mlDatasetRowJson = 'ml_dataset_row.json';
   static const String mlDatasetRowCsv = 'ml_dataset_row.csv';
   static const String mlDatasetSchema = 'ml_dataset_schema.json';
+
+  // Share/export files
+  static const String sessionExportMetadata = 'session_export_metadata.json';
 
   static String framewiseLogCsv(String stimulusId) {
     return '${stimulusId}_framewise_log.csv';

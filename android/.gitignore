@@ -12,3 +12,11 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Local research exports / sensitive session artifacts
+session_exports/
+*_export.zip
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
