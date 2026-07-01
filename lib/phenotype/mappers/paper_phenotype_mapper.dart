@@ -307,50 +307,50 @@ class PaperPhenotypeMapper {
 
     setFeature(
       name: PaperFeatureNames.mouthComplexitySocialMovies,
-      value: _meanForStimuli(
-        csvRowsByStimulus,
+      value: _meanSummaryValueByStimuli(
+        summariesByStimulus,
         allSocialLikeStimuli,
-        (List<Map<String, String>> rows) => _stdColumn(rows, 'mouth_open'),
+        'mouth_complexity_composite',
       ),
-      source: 'mobile_mlkit_mouth_contour_proxy',
+      source: 'mobile_mlkit_mouth_contour_complexity_v2',
       note:
-          'Proxy for paper mouth complexity. Uses standard deviation of normalized ML Kit lip-contour mouth-open signal.',
+          'Close mobile proxy for paper mouth complexity. Uses smoothed normalized mouth-open signal and combines standard deviation, RMSSD, and movement energy across social/mixed/speech stimuli.',
     );
 
     setFeature(
       name: PaperFeatureNames.mouthComplexityNonsocialMovies,
-      value: _meanForStimuli(
-        csvRowsByStimulus,
+      value: _meanSummaryValueByStimuli(
+        summariesByStimulus,
         allNonsocialLikeStimuli,
-        (List<Map<String, String>> rows) => _stdColumn(rows, 'mouth_open'),
+        'mouth_complexity_composite',
       ),
-      source: 'mobile_mlkit_mouth_contour_proxy',
+      source: 'mobile_mlkit_mouth_contour_complexity_v2',
       note:
-          'Proxy for paper mouth complexity. Uses standard deviation of normalized ML Kit lip-contour mouth-open signal.',
+          'Close mobile proxy for paper mouth complexity. Uses smoothed normalized mouth-open signal and combines standard deviation, RMSSD, and movement energy across nonsocial/mixed stimuli.',
     );
 
     setFeature(
       name: PaperFeatureNames.eyebrowComplexitySocialMovies,
-      value: _meanForStimuli(
-        csvRowsByStimulus,
+      value: _meanSummaryValueByStimuli(
+        summariesByStimulus,
         allSocialLikeStimuli,
-        (List<Map<String, String>> rows) => _stdColumn(rows, 'eyebrow_signal'),
+        'eyebrow_complexity_composite',
       ),
-      source: 'mobile_mlkit_eyebrow_contour_proxy',
+      source: 'mobile_mlkit_eyebrow_contour_complexity_v2',
       note:
-          'Proxy for paper eyebrow complexity. Uses standard deviation of normalized ML Kit eyebrow-to-eye distance signal.',
+          'Close mobile proxy for paper eyebrow complexity. Uses smoothed normalized eyebrow signal and combines standard deviation, RMSSD, and movement energy across social/mixed/speech stimuli.',
     );
 
     setFeature(
       name: PaperFeatureNames.eyebrowComplexityNonsocialMovies,
-      value: _meanForStimuli(
-        csvRowsByStimulus,
+      value: _meanSummaryValueByStimuli(
+        summariesByStimulus,
         allNonsocialLikeStimuli,
-        (List<Map<String, String>> rows) => _stdColumn(rows, 'eyebrow_signal'),
+        'eyebrow_complexity_composite',
       ),
-      source: 'mobile_mlkit_eyebrow_contour_proxy',
+      source: 'mobile_mlkit_eyebrow_contour_complexity_v2',
       note:
-          'Proxy for paper eyebrow complexity. Uses standard deviation of normalized ML Kit eyebrow-to-eye distance signal.',
+          'Close mobile proxy for paper eyebrow complexity. Uses smoothed normalized eyebrow signal and combines standard deviation, RMSSD, and movement energy across nonsocial/mixed stimuli.',
     );
 
     setFeature(

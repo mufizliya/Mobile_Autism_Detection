@@ -367,6 +367,16 @@ class FramewiseLogExporter {
         .whereType<double>()
         .toList();
 
+    final Map<String, dynamic> mouthComplexity = _signalComplexitySummary(
+      mouthOpenValues,
+      signalName: 'mouth_open_signal',
+    );
+
+    final Map<String, dynamic> eyebrowComplexity = _signalComplexitySummary(
+      eyebrowSignalValues,
+      signalName: 'eyebrow_signal',
+    );
+
     return {
       'schema_version': 'python_mobile_replica_framewise_summary_v1',
       'generated_at': DateTime.now().toIso8601String(),
@@ -397,17 +407,145 @@ class FramewiseLogExporter {
           headDynamics['velocity_complexity_std'],
       'mean_head_angular_acceleration_deg_per_sec2':
           headDynamics['mean_acceleration_deg_per_sec2'],
-      'mouth_open_proxy_mean': _round4(_mean(mouthOpenValues)),
-      'mouth_complexity_proxy': _round4(_std(mouthOpenValues)),
-      'eyebrow_signal_mean': eyebrowSignalValues.isEmpty
-          ? null
-          : _round4(_mean(eyebrowSignalValues)),
-      'eyebrow_complexity_proxy': eyebrowSignalValues.length <= 1
-          ? null
-          : _round4(_std(eyebrowSignalValues)),
+      'mouth_open_proxy_mean': mouthComplexity['mean'],
+      'mouth_complexity_proxy': mouthComplexity['std'],
+      'mouth_complexity_composite': mouthComplexity['composite_complexity'],
+      'mouth_complexity_rmssd': mouthComplexity['rmssd'],
+      'mouth_complexity_movement_energy': mouthComplexity['movement_energy'],
+      'mouth_complexity_range': mouthComplexity['range'],
+      'mouth_complexity_valid_sample_count':
+          mouthComplexity['valid_sample_count'],
+      'mouth_complexity_signal_quality': mouthComplexity['quality'],
+      'mouth_complexity_details': mouthComplexity,
+      'eyebrow_signal_mean': eyebrowComplexity['mean'],
+      'eyebrow_complexity_proxy': eyebrowComplexity['std'],
+      'eyebrow_complexity_composite': eyebrowComplexity['composite_complexity'],
+      'eyebrow_complexity_rmssd': eyebrowComplexity['rmssd'],
+      'eyebrow_complexity_movement_energy': eyebrowComplexity['movement_energy'],
+      'eyebrow_complexity_range': eyebrowComplexity['range'],
+      'eyebrow_complexity_valid_sample_count':
+          eyebrowComplexity['valid_sample_count'],
+      'eyebrow_complexity_signal_quality': eyebrowComplexity['quality'],
+      'eyebrow_complexity_details': eyebrowComplexity,
       'measurement_source':
           'mobile_native_mlkit_mediapipe_head_pose_contour_to_python_csv',
     };
+  }
+
+
+  static Map<String, dynamic> _signalComplexitySummary(
+    List<double> rawValues, {
+    required String signalName,
+  }) {
+    final List<double> values = rawValues
+        .where((double value) => value.isFinite)
+        .toList();
+
+    if (values.isEmpty) {
+      return {
+        'signal_name': signalName,
+        'quality': 'missing',
+        'valid_sample_count': 0,
+        'mean': null,
+        'std': null,
+        'rmssd': null,
+        'movement_energy': null,
+        'range': null,
+        'composite_complexity': null,
+        'method':
+            'moving_average_smooth_then_std_rmssd_energy_composite',
+      };
+    }
+
+    final List<double> smoothed = _movingAverage(values, windowRadius: 1);
+    final double meanValue = _mean(smoothed);
+    final double stdValue = _std(smoothed);
+    final double rmssdValue = _rmssd(smoothed);
+    final double movementEnergy = _meanAbsDiff(smoothed);
+    final double rangeValue = _range(smoothed);
+
+    final double composite = (stdValue + rmssdValue + movementEnergy) / 3.0;
+
+    String quality = 'valid';
+
+    if (values.length < 5) {
+      quality = 'too_few_samples';
+    } else if (stdValue < 0.0005 && rmssdValue < 0.0005) {
+      quality = 'nearly_constant_signal';
+    }
+
+    return {
+      'signal_name': signalName,
+      'quality': quality,
+      'valid_sample_count': values.length,
+      'mean': _round4(meanValue),
+      'std': _round4(stdValue),
+      'rmssd': _round4(rmssdValue),
+      'movement_energy': _round4(movementEnergy),
+      'range': _round4(rangeValue),
+      'composite_complexity': _round4(composite),
+      'method':
+          'moving_average_smooth_then_std_rmssd_energy_composite',
+      'formula_note':
+          'Composite is the mean of smoothed signal std, RMSSD, and mean absolute frame-to-frame movement energy.',
+    };
+  }
+
+  static List<double> _movingAverage(
+    List<double> values, {
+    required int windowRadius,
+  }) {
+    if (values.length <= 2 || windowRadius <= 0) {
+      return [...values];
+    }
+
+    final List<double> smoothed = [];
+
+    for (int i = 0; i < values.length; i++) {
+      final int start = max(0, i - windowRadius);
+      final int end = min(values.length - 1, i + windowRadius);
+      final List<double> window = values.sublist(start, end + 1);
+      smoothed.add(_mean(window));
+    }
+
+    return smoothed;
+  }
+
+  static double _rmssd(List<double> values) {
+    if (values.length <= 1) {
+      return 0.0;
+    }
+
+    final List<double> squaredDiffs = [];
+
+    for (int i = 1; i < values.length; i++) {
+      final double diff = values[i] - values[i - 1];
+      squaredDiffs.add(diff * diff);
+    }
+
+    return sqrt(_mean(squaredDiffs));
+  }
+
+  static double _meanAbsDiff(List<double> values) {
+    if (values.length <= 1) {
+      return 0.0;
+    }
+
+    final List<double> diffs = [];
+
+    for (int i = 1; i < values.length; i++) {
+      diffs.add((values[i] - values[i - 1]).abs());
+    }
+
+    return _mean(diffs);
+  }
+
+  static double _range(List<double> values) {
+    if (values.isEmpty) {
+      return 0.0;
+    }
+
+    return values.reduce(max) - values.reduce(min);
   }
 
   static Map<String, dynamic> _headAngularDynamicsSummary(

@@ -550,13 +550,21 @@ class FeatureReliabilityBuilder {
         );
       }
 
+      final bool usesAngularDynamics = source.contains('angular_dynamics');
+
       return _result(
-        status:
-            strongFramewiseQuality ? 'computed_proxy' : 'computed_proxy',
+        status: strongFramewiseQuality && usesAngularDynamics
+            ? 'computed_close_proxy'
+            : 'computed_proxy',
         source: source,
-        confidence: strongFramewiseQuality ? 'medium_high' : 'medium',
-        reason:
-            'Computed from framewise mobile head/face motion signals. Confidence is improved by strong framewise quality, but this remains below high until Patch 2 switches movement computation fully to yaw/pitch/roll angular dynamics.',
+        confidence: strongFramewiseQuality && usesAngularDynamics
+            ? 'high'
+            : strongFramewiseQuality
+            ? 'medium_high'
+            : 'medium',
+        reason: strongFramewiseQuality && usesAngularDynamics
+            ? 'Computed from ML Kit yaw/pitch/roll angular velocity, complexity, and acceleration with strong framewise quality. This is a close mobile proxy for head-movement features.'
+            : 'Computed from framewise mobile head/face motion signals, but quality gates or angular-dynamics source labels were not fully strong.',
         evidence: qualityContext['framewise'],
       );
     }
@@ -574,13 +582,23 @@ class FeatureReliabilityBuilder {
         );
       }
 
+      final bool usesComplexityV2 = source.contains('complexity_v2');
+
       return _result(
-        status:
-            strongFramewiseQuality ? 'computed_close_proxy' : 'computed_proxy',
+        status: strongFramewiseQuality && usesComplexityV2
+            ? 'computed_close_proxy'
+            : strongFramewiseQuality
+            ? 'computed_close_proxy'
+            : 'computed_proxy',
         source: source,
-        confidence: strongFramewiseQuality ? 'medium_high' : 'medium',
-        reason:
-            'Computed from normalized ML Kit lip-contour mouth-open signal. It is a close mobile proxy when framewise quality is strong, but not the original paper facial-landmark implementation.',
+        confidence: strongFramewiseQuality && usesComplexityV2
+            ? 'medium_high'
+            : strongFramewiseQuality
+            ? 'medium_high'
+            : 'medium',
+        reason: usesComplexityV2
+            ? 'Computed from smoothed normalized ML Kit mouth-contour signal using a composite of standard deviation, RMSSD, and movement energy. This is stronger than simple standard deviation, but still not the original paper facial-landmark pipeline.'
+            : 'Computed from normalized ML Kit lip-contour mouth-open signal. It is a close mobile proxy when framewise quality is strong, but not the original paper facial-landmark implementation.',
         evidence: qualityContext['framewise'],
       );
     }
@@ -598,13 +616,23 @@ class FeatureReliabilityBuilder {
         );
       }
 
+      final bool usesComplexityV2 = source.contains('complexity_v2');
+
       return _result(
-        status:
-            strongFramewiseQuality ? 'computed_close_proxy' : 'computed_proxy',
+        status: strongFramewiseQuality && usesComplexityV2
+            ? 'computed_close_proxy'
+            : strongFramewiseQuality
+            ? 'computed_close_proxy'
+            : 'computed_proxy',
         source: source,
-        confidence: strongFramewiseQuality ? 'medium_high' : 'medium',
-        reason:
-            'Computed from normalized ML Kit eyebrow-to-eye contour signal. It is a close mobile proxy when framewise quality is strong, but not the original paper facial-landmark implementation.',
+        confidence: strongFramewiseQuality && usesComplexityV2
+            ? 'medium_high'
+            : strongFramewiseQuality
+            ? 'medium_high'
+            : 'medium',
+        reason: usesComplexityV2
+            ? 'Computed from smoothed normalized ML Kit eyebrow-contour signal using a composite of standard deviation, RMSSD, and movement energy. This is stronger than simple standard deviation, but still not the original paper facial-landmark pipeline.'
+            : 'Computed from normalized ML Kit eyebrow-to-eye contour signal. It is a close mobile proxy when framewise quality is strong, but not the original paper facial-landmark implementation.',
         evidence: qualityContext['framewise'],
       );
     }
@@ -672,37 +700,27 @@ class FeatureReliabilityBuilder {
     final List<Map<String, dynamic>> improvements = [
       {
         'priority': 1,
-        'area': 'head_pose_dynamics',
-        'features': [
-          PaperFeatureNames.headMovementSocialMovies,
-          PaperFeatureNames.headMovementNonsocialMovies,
-          PaperFeatureNames.headMovementComplexitySocialMovies,
-          PaperFeatureNames.headMovementComplexityNonsocialMovies,
-          PaperFeatureNames.headMovementAccelerationSocialMovies,
-          PaperFeatureNames.headMovementAccelerationNonsocialMovies,
-        ],
+        'area': 'attention_to_speech',
+        'features': [PaperFeatureNames.attentionToSpeech],
         'recommendation':
-            'Patch 2: compute head movement from yaw/pitch/roll angular dynamics instead of face-center motion.',
+            'Next: compute attention-to-speech from speaker windows plus calibrated gaze/social AOI instead of facing-forward ratio.',
       },
       {
         'priority': 2,
-        'area': 'blink_event_detection',
+        'area': 'blink_sampling_rate',
         'features': [
           PaperFeatureNames.blinkRateSocialMovies,
           PaperFeatureNames.blinkRateNonsocialMovies,
         ],
         'recommendation':
-            'Patch 3: detect blink events using eye-open probability thresholds and valid blink-duration windows.',
+            'For stronger blink features, increase eye-signal sampling or add offline/MediaPipe eyelid-landmark blink analysis. Current blink values are sampled proxies.',
       },
       {
         'priority': 3,
-        'area': 'response_to_name_gaze_plus_head',
-        'features': [
-          PaperFeatureNames.responseToNameDelaySec,
-          PaperFeatureNames.responseToNameProportion,
-        ],
+        'area': 'dataset_export',
+        'features': PaperFeatureNames.all,
         'recommendation':
-            'Patch 4: combine post-call head movement, gaze shift, and face reorientation for response-to-name detection.',
+            'Add a flat ml_dataset_row.json/csv with feature values, availability flags, confidence labels, and session-quality metadata.',
       },
       {
         'priority': 4,

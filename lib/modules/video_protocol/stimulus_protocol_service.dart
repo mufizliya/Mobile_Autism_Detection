@@ -250,7 +250,7 @@ class StimulusProtocolService {
         'subtitle_path': 'parent_name_call_cues.srt',
         'on_screen_name_call_cue': true,
         'paper_style_note':
-            'Mobile replica generated Python-style raw video protocol files. Framewise CSV recording will be added in the next step.',
+            'Mobile replica generated a paper-aligned master video protocol with actual playback-time name-call cue logging and unified framewise face/iris recording.',
       },
     };
   }
@@ -276,7 +276,7 @@ class StimulusProtocolService {
       'subtitle_path': 'parent_name_call_cues.srt',
       'on_screen_name_call_cue': true,
       'paper_style_note':
-          'Matches Python raw protocol metadata. Framewise recorder is not attached yet.',
+          'Matches Python-style protocol metadata and is paired with unified framewise face/iris recording during playback.',
     };
   }
 
