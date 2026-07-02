@@ -290,17 +290,17 @@ class _PrototypeModelCard extends StatelessWidget {
     final List<Map<String, dynamic>> topContributors =
         explanation['top_contributors'] is List
             ? (explanation['top_contributors'] as List<dynamic>)
-                .where((dynamic item) => item is Map)
-                .map((dynamic item) =>
-                    Map<String, dynamic>.from(item as Map))
+                .whereType<Map<dynamic, dynamic>>()
+                .map((Map<dynamic, dynamic> item) =>
+                    Map<String, dynamic>.from(item))
                 .toList()
             : <Map<String, dynamic>>[];
     final List<Map<String, dynamic>> missingImportantFeatures =
         explanation['missing_important_features'] is List
             ? (explanation['missing_important_features'] as List<dynamic>)
-                .where((dynamic item) => item is Map)
-                .map((dynamic item) =>
-                    Map<String, dynamic>.from(item as Map))
+                .whereType<Map<dynamic, dynamic>>()
+                .map((Map<dynamic, dynamic> item) =>
+                    Map<String, dynamic>.from(item))
                 .toList()
             : <Map<String, dynamic>>[];
 
@@ -489,9 +489,9 @@ class _ContributionTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.18)),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
