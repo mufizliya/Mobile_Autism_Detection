@@ -44,7 +44,7 @@ class PrototypeModelPredictionService {
       final PrototypeXgboostPrediction prediction = runtime.predict(row);
 
       return <String, dynamic>{
-        'schema_version': 'mobile_prototype_model_prediction_v1',
+        'schema_version': 'mobile_prototype_model_prediction_v2_with_explanation',
         'generated_at': DateTime.now().toIso8601String(),
         'status': 'computed',
         'asset_path': PrototypeXgboostRuntime.defaultAssetPath,
@@ -67,13 +67,18 @@ class PrototypeModelPredictionService {
     required String message,
   }) {
     return <String, dynamic>{
-      'schema_version': 'mobile_prototype_model_prediction_v1',
+      'schema_version': 'mobile_prototype_model_prediction_v2_with_explanation',
       'generated_at': DateTime.now().toIso8601String(),
       'status': status,
       'clinical_use_allowed': false,
       'prototype_prediction': 'unavailable',
       'autism_probability_prototype': null,
       'threshold': null,
+      'prototype_explanation': <String, dynamic>{
+        'status': 'unavailable',
+        'method': 'not_available',
+        'top_contributors': <Map<String, dynamic>>[],
+      },
       'error': message,
       'display_warning':
           'Prototype model result unavailable. This app is still research-only and not diagnostic.',

@@ -1,7 +1,7 @@
 {
-  "schema_version": "flutter_xgboost_tree_ensemble_v1",
+  "schema_version": "flutter_xgboost_tree_ensemble_v2_with_explanation_profile",
   "model_id": "synthetic_xgboost_prototype_v1",
-  "created_by": "model_lab/export_xgboost_for_flutter_patch11.py",
+  "created_by": "model_lab/export_xgboost_for_flutter_patch12.py",
   "source_model_bundle": "outputs/synthetic_xgboost/model_bundle.joblib",
   "target_mode": "autism_vs_nonautism",
   "objective": "binary:logistic",
@@ -8814,6 +8814,268 @@
     "max_abs_probability_diff": 0.0018762775916053038,
     "mean_abs_probability_diff": 3.7528607178730035e-05,
     "mismatched_threshold_labels": 0
+  },
+  "explanation_profile": {
+    "schema_version": "prototype_explanation_profile_v1",
+    "status": "ok",
+    "method": "reference_medians_plus_xgboost_feature_importance",
+    "reference_source": "data/synthetic/synthetic_ml_dataset.csv",
+    "note": "Used only for approximate app display. This is not SHAP and not clinical evidence.",
+    "features": [
+      {
+        "feature": "paper_facing_forward_social_movies",
+        "display_name": "Facing forward - social movies",
+        "unit": "%",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.1643632399040077,
+        "overall_median": 94.791473,
+        "autism_median": 53.335941,
+        "nonautism_median": 96.252242,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_gaze_silhouette_score",
+        "display_name": "Gaze silhouette score",
+        "unit": "score",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.15187125339365865,
+        "overall_median": 0.658269,
+        "autism_median": 0.46170750000000005,
+        "nonautism_median": 0.676964,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_pop_the_bubbles_average_touch_length",
+        "display_name": "Bubble game average touch length",
+        "unit": "mm_or_px_proxy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.12835325665285283,
+        "overall_median": 19.927494,
+        "autism_median": 27.770278,
+        "nonautism_median": 19.5275205,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_gaze_percent_social",
+        "display_name": "Gaze percent social",
+        "unit": "ratio",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.06444826905212571,
+        "overall_median": 0.611854,
+        "autism_median": 0.368338,
+        "nonautism_median": 0.624031,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_head_movement_acceleration_social_movies",
+        "display_name": "Head movement acceleration - social movies",
+        "unit": "acceleration",
+        "configured_direction": "autism",
+        "importance_normalized": 0.052618911121857154,
+        "overall_median": 0.008437,
+        "autism_median": 0.0221405,
+        "nonautism_median": 0.007844,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_head_movement_nonsocial_movies",
+        "display_name": "Head movement - nonsocial movies",
+        "unit": "distance",
+        "configured_direction": "autism",
+        "importance_normalized": 0.04348546017548678,
+        "overall_median": 0.9589719999999999,
+        "autism_median": 2.6219045000000003,
+        "nonautism_median": 0.8917025000000001,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_response_to_name_delay_sec",
+        "display_name": "Response to name delay",
+        "unit": "sec",
+        "configured_direction": "autism",
+        "importance_normalized": 0.04110501078302304,
+        "overall_median": 1.2934839999999999,
+        "autism_median": 3.0014285000000003,
+        "nonautism_median": 1.2179375000000001,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_blink_rate_social_movies",
+        "display_name": "Blink rate during social movies",
+        "unit": "blinks_per_min",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.03876647463289786,
+        "overall_median": 8.816127,
+        "autism_median": 12.217078,
+        "nonautism_median": 8.621597,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_attention_to_speech",
+        "display_name": "Attention to speech",
+        "unit": "ratio",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.03408695854214228,
+        "overall_median": 0.60946,
+        "autism_median": 0.22164,
+        "nonautism_median": 0.629889,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_pop_the_bubbles_popping_rate",
+        "display_name": "Bubble game popping rate",
+        "unit": "ratio",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.031256460541227875,
+        "overall_median": 0.85213,
+        "autism_median": 0.7714915,
+        "nonautism_median": 0.856283,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_head_movement_social_movies",
+        "display_name": "Head movement - social movies",
+        "unit": "distance",
+        "configured_direction": "autism",
+        "importance_normalized": 0.031045445191567836,
+        "overall_median": 0.95627,
+        "autism_median": 2.778973,
+        "nonautism_median": 0.860487,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_response_to_name_proportion",
+        "display_name": "Response to name proportion",
+        "unit": "ratio",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.03046288800343693,
+        "overall_median": 0.866,
+        "autism_median": 0.568719,
+        "nonautism_median": 0.8900684999999999,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_head_movement_complexity_social_movies",
+        "display_name": "Head movement complexity - social movies",
+        "unit": "entropy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.02949350783559679,
+        "overall_median": 5.077049,
+        "autism_median": 3.943245,
+        "nonautism_median": 5.2854849999999995,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_blink_rate_nonsocial_movies",
+        "display_name": "Blink rate during nonsocial movies",
+        "unit": "blinks_per_min",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.02585231213690296,
+        "overall_median": 9.102462,
+        "autism_median": 13.846498,
+        "nonautism_median": 8.621167,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_facing_forward_nonsocial_movies",
+        "display_name": "Facing forward - nonsocial movies",
+        "unit": "%",
+        "configured_direction": "nonautism",
+        "importance_normalized": 0.022935029770730444,
+        "overall_median": 88.617458,
+        "autism_median": 74.132695,
+        "nonautism_median": 89.777805,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_head_movement_acceleration_nonsocial_movies",
+        "display_name": "Head movement acceleration - nonsocial movies",
+        "unit": "acceleration",
+        "configured_direction": "autism",
+        "importance_normalized": 0.022666657987360908,
+        "overall_median": 0.011431,
+        "autism_median": 0.017201,
+        "nonautism_median": 0.010834,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_mouth_complexity_nonsocial_movies",
+        "display_name": "Mouth complexity - nonsocial movies",
+        "unit": "entropy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.020748876624592336,
+        "overall_median": 23.4065,
+        "autism_median": 26.6286335,
+        "nonautism_median": 23.0330965,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_mouth_complexity_social_movies",
+        "display_name": "Mouth complexity - social movies",
+        "unit": "entropy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.020309797133737068,
+        "overall_median": 23.534878,
+        "autism_median": 22.456073,
+        "nonautism_median": 23.64342,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_pop_the_bubbles_accuracy_std",
+        "display_name": "Bubble game accuracy variation",
+        "unit": "distance",
+        "configured_direction": "autism",
+        "importance_normalized": 0.015837751778821862,
+        "overall_median": 8.6752965,
+        "autism_median": 13.353728,
+        "nonautism_median": 8.372756,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_eyebrow_complexity_nonsocial_movies",
+        "display_name": "Eyebrow complexity - nonsocial movies",
+        "unit": "entropy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.013899797968514113,
+        "overall_median": 29.476262,
+        "autism_median": 28.342587,
+        "nonautism_median": 29.509103,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_head_movement_complexity_nonsocial_movies",
+        "display_name": "Head movement complexity - nonsocial movies",
+        "unit": "entropy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.010151740451928307,
+        "overall_median": 2.8884705,
+        "autism_median": 2.54825,
+        "nonautism_median": 2.91255,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_eyebrow_complexity_social_movies",
+        "display_name": "Eyebrow complexity - social movies",
+        "unit": "entropy",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.006240900317530576,
+        "overall_median": 27.761612,
+        "autism_median": 25.526116000000002,
+        "nonautism_median": 28.022525,
+        "autism_reference_direction": "lower_values_match_synthetic_autism_reference"
+      },
+      {
+        "feature": "paper_pop_the_bubbles_average_applied_force",
+        "display_name": "Bubble game average applied force",
+        "unit": "device_pressure",
+        "configured_direction": "mixed",
+        "importance_normalized": 0.0,
+        "overall_median": 0.292688,
+        "autism_median": 0.33195050000000004,
+        "nonautism_median": 0.287887,
+        "autism_reference_direction": "higher_values_match_synthetic_autism_reference"
+      }
+    ]
   },
   "clinical_use_allowed": false,
   "warning": "Synthetic/research prototype model only. Not validated for clinical or diagnostic use."

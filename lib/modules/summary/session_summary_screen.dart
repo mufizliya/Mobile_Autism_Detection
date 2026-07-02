@@ -281,6 +281,29 @@ class _PrototypeModelCard extends StatelessWidget {
     );
     final double? threshold = _doubleOrNull(prediction['threshold']);
 
+    final Map<String, dynamic> explanation =
+        prediction['prototype_explanation'] is Map
+            ? Map<String, dynamic>.from(
+                prediction['prototype_explanation'] as Map,
+              )
+            : <String, dynamic>{};
+    final List<Map<String, dynamic>> topContributors =
+        explanation['top_contributors'] is List
+            ? (explanation['top_contributors'] as List<dynamic>)
+                .where((dynamic item) => item is Map)
+                .map((dynamic item) =>
+                    Map<String, dynamic>.from(item as Map))
+                .toList()
+            : <Map<String, dynamic>>[];
+    final List<Map<String, dynamic>> missingImportantFeatures =
+        explanation['missing_important_features'] is List
+            ? (explanation['missing_important_features'] as List<dynamic>)
+                .where((dynamic item) => item is Map)
+                .map((dynamic item) =>
+                    Map<String, dynamic>.from(item as Map))
+                .toList()
+            : <Map<String, dynamic>>[];
+
     final Color accentColor = !computed
         ? Colors.orange
         : label == 'autism_positive'
@@ -332,6 +355,50 @@ class _PrototypeModelCard extends StatelessWidget {
               Text(
                 'Missing features: ${prediction['missing_feature_count'] ?? 'unknown'}',
               ),
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Row(
+                children: const <Widget>[
+                  Icon(Icons.insights, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Prototype Explanation',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Approximate feature evidence from synthetic reference medians. This is not SHAP and not clinical evidence.',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 10),
+              if (topContributors.isEmpty)
+                Text(
+                  explanation['reason']?.toString() ??
+                      'No prototype explanation was available. Re-export the model asset with Patch 12 if needed.',
+                  style: const TextStyle(color: Colors.orange),
+                )
+              else
+                for (final Map<String, dynamic> contributor
+                    in topContributors.take(5))
+                  _ContributionTile(contribution: contributor),
+              if (missingImportantFeatures.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Important missing feature: ${missingImportantFeatures.first['display_name'] ?? missingImportantFeatures.first['feature']}',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ] else ...[
               Text(
                 'Prototype prediction unavailable',
@@ -385,6 +452,91 @@ class _PrototypeModelCard extends StatelessWidget {
       return 'unavailable';
     }
     return value.toStringAsFixed(4);
+  }
+}
+
+class _ContributionTile extends StatelessWidget {
+  const _ContributionTile({required this.contribution});
+
+  final Map<String, dynamic> contribution;
+
+  @override
+  Widget build(BuildContext context) {
+    final String direction = contribution['evidence_direction']?.toString() ?? '';
+    final bool towardAutism = direction == 'toward_autism_pattern';
+    final Color color = towardAutism ? Colors.deepOrange : Colors.green;
+    final IconData icon = towardAutism
+        ? Icons.trending_up
+        : Icons.trending_down;
+    final String label = towardAutism
+        ? 'toward positive pattern'
+        : 'toward negative pattern';
+    final String displayName = contribution['display_name']?.toString() ??
+        contribution['feature']?.toString() ??
+        'feature';
+    final double? value = _doubleOrNull(contribution['value']);
+    final double? strength = _doubleOrNull(
+      contribution['prototype_evidence_strength'],
+    );
+    final String unit = contribution['unit']?.toString() ?? '';
+    final String valueText = value == null
+        ? 'unavailable'
+        : unit.isEmpty
+            ? value.toStringAsFixed(3)
+            : '${value.toStringAsFixed(3)} $unit';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  displayName,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$label • value: $valueText • strength: ${_formatStrength(strength)}',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static double? _doubleOrNull(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  static String _formatStrength(double? value) {
+    if (value == null) {
+      return 'n/a';
+    }
+    if (value >= 0.12) {
+      return 'strong';
+    }
+    if (value >= 0.05) {
+      return 'moderate';
+    }
+    return 'weak';
   }
 }
 
