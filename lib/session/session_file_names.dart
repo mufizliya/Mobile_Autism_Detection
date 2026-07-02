@@ -48,6 +48,9 @@ class SessionFileNames {
   // Share/export files
   static const String sessionExportMetadata = 'session_export_metadata.json';
 
+  // Prototype model output file
+  static const String prototypePrediction = 'prototype_prediction.json';
+
   static String framewiseLogCsv(String stimulusId) {
     return '${stimulusId}_framewise_log.csv';
   }

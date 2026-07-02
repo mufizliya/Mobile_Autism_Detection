@@ -168,6 +168,13 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
     final bool mlRowReady = files[SessionFileNames.mlDatasetRowCsv] == true &&
         files[SessionFileNames.mlDatasetRowJson] == true;
 
+    final Map<String, dynamic> prototypePrediction =
+        finalSession?['prototype_model_prediction'] is Map
+            ? Map<String, dynamic>.from(
+                finalSession!['prototype_model_prediction'] as Map,
+              )
+            : <String, dynamic>{};
+
     return Scaffold(
       appBar: AppBar(title: const Text('Session Summary')),
       body: SafeArea(
@@ -211,6 +218,8 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    _PrototypeModelCard(prediction: prototypePrediction),
+                    const SizedBox(height: 16),
                     _ExportCard(
                       mlRowReady: mlRowReady,
                       clinicalUseAllowed:
@@ -253,6 +262,129 @@ class _SessionSummaryScreenState extends State<SessionSummaryScreen> {
               ),
       ),
     );
+  }
+}
+
+class _PrototypeModelCard extends StatelessWidget {
+  const _PrototypeModelCard({required this.prediction});
+
+  final Map<String, dynamic> prediction;
+
+  @override
+  Widget build(BuildContext context) {
+    final String status = prediction['status']?.toString() ?? 'unavailable';
+    final bool computed = status == 'computed';
+    final String label = prediction['prototype_prediction']?.toString() ??
+        'unavailable';
+    final double? probability = _doubleOrNull(
+      prediction['autism_probability_prototype'],
+    );
+    final double? threshold = _doubleOrNull(prediction['threshold']);
+
+    final Color accentColor = !computed
+        ? Colors.orange
+        : label == 'autism_positive'
+            ? Colors.deepOrange
+            : Colors.green;
+
+    return Card(
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.science_outlined, color: accentColor),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Prototype Model Test Result',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (computed) ...[
+              Text(
+                label == 'autism_positive'
+                    ? 'Prototype output: Autism-positive pattern'
+                    : 'Prototype output: Autism-negative pattern',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: accentColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Probability: ${_formatPercent(probability)}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text('Threshold: ${_formatDecimal(threshold)}'),
+              const SizedBox(height: 8),
+              Text('Model: ${prediction['model_id'] ?? 'unknown'}'),
+              Text(
+                'Missing features: ${prediction['missing_feature_count'] ?? 'unknown'}',
+              ),
+            ] else ...[
+              Text(
+                'Prototype prediction unavailable',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: accentColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SelectableText(
+                prediction['error']?.toString() ??
+                    'No prototype prediction was generated yet.',
+              ),
+            ],
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: const Text(
+                'Research prototype only. This is not a diagnosis, not a clinical screening result, and not for medical decisions.',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static double? _doubleOrNull(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  static String _formatPercent(double? value) {
+    if (value == null) {
+      return 'unavailable';
+    }
+    return '${(value * 100).toStringAsFixed(2)}%';
+  }
+
+  static String _formatDecimal(double? value) {
+    if (value == null) {
+      return 'unavailable';
+    }
+    return value.toStringAsFixed(4);
   }
 }
 

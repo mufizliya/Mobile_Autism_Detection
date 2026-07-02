@@ -6,6 +6,7 @@ import '../phenotype/mappers/paper_phenotype_mapper.dart';
 import '../phenotype/validation/session_quality_validator.dart';
 import '../phenotype/validation/feature_reliability_builder.dart';
 import '../phenotype/dataset/ml_dataset_exporter.dart';
+import '../phenotype/model/prototype_model_prediction_service.dart';
 
 class SessionAssembler {
   static Future<Map<String, dynamic>> buildAndSave({
@@ -77,6 +78,11 @@ class SessionAssembler {
 
     final Map<String, dynamic> mlDatasetExport =
         await MlDatasetExporter.buildAndSave(sessionDir: sessionDir);
+
+    final Map<String, dynamic> prototypeModelPrediction =
+        await PrototypeModelPredictionService.buildAndSave(
+      sessionDir: sessionDir,
+    );
 
     final Map<String, dynamic>? attentionToSpeechFeatures =
         await SessionService.readJsonIfExists(
@@ -154,6 +160,8 @@ class SessionAssembler {
       SessionFileNames.mlDatasetRowJson: true,
       SessionFileNames.mlDatasetRowCsv: true,
       SessionFileNames.mlDatasetSchema: true,
+      SessionFileNames.prototypePrediction:
+          prototypeModelPrediction['status'] == 'computed',
     };
 
     final Map<String, dynamic> manifest = {
@@ -204,6 +212,8 @@ class SessionAssembler {
         if (attentionToSpeechFeatures != null) 'attention_to_speech_features',
         'feature_reliability_report',
         'ml_dataset_export',
+        if (prototypeModelPrediction['status'] == 'computed')
+          'prototype_model_prediction',
       ],
       'files': files,
       'manifest_file': SessionFileNames.sessionManifest,
@@ -250,6 +260,7 @@ class SessionAssembler {
         'clinical_use_allowed': mlDatasetExport['clinical_use_allowed'],
         'intended_use': mlDatasetExport['intended_use'],
       },
+      'prototype_model_prediction': prototypeModelPrediction,
     };
 
     await SessionService.saveJson(

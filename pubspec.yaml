@@ -72,6 +72,7 @@ flutter:
     - assets/bubble_game/bubble.png
     - assets/bubble_game/music.mp3
     - assets/bubble_game/pop.mp3
+    - assets/model/prototype_xgboost_model.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:
